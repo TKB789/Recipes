@@ -1,0 +1,175 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+<meta name="theme-color" content="#f5efe6">
+<title>Saffron — Your Recipe Kitchen</title>
+<link rel="stylesheet" href="styles.css">
+<link href="https://fonts.googleapis.com/css2?family=Fraunces:opsz,wght@9..144,400;9..144,500;9..144,600;9..144,700;9..144,900&family=Inter:wght@400;500;600;700&display=swap" rel="stylesheet">
+</head>
+<body>
+
+<header class="topbar">
+  <div class="brand">
+    <span class="brand-mark">✺</span>
+    <h1>Saffron</h1>
+  </div>
+  <div class="topbar-actions">
+    <button class="icon-btn" id="btnImportExport" title="Import / Export">⇅</button>
+  </div>
+</header>
+
+<nav class="tabs" role="tablist">
+  <button class="tab active" data-tab="rotation" role="tab">Rotation</button>
+  <button class="tab" data-tab="library" role="tab">Library</button>
+  <button class="tab" data-tab="kitchen" role="tab">Kitchen</button>
+  <button class="tab" data-tab="shopping" role="tab">Shopping</button>
+</nav>
+
+<main>
+  <!-- ROTATION TAB -->
+  <section class="panel active" id="tab-rotation">
+    <div class="section-head">
+      <h2>Current Rotation</h2>
+      <p class="muted">Recipes you're cooking from this week. Spin the wheel to decide tonight's dinner.</p>
+    </div>
+    <div class="wheel-wrap" id="wheelWrap">
+      <div class="wheel-stage">
+        <canvas id="wheel" width="600" height="600"></canvas>
+        <div class="wheel-pointer">▼</div>
+      </div>
+      <button class="primary-btn spin-btn" id="spinBtn">Spin the Wheel</button>
+      <div class="wheel-result" id="wheelResult"></div>
+    </div>
+    <div class="grid" id="rotationGrid"></div>
+    <div class="empty-state" id="rotationEmpty" style="display:none">
+      <p>No recipes in rotation yet.</p>
+      <p class="muted">Save recipes in the Library, then mark them for current rotation.</p>
+    </div>
+  </section>
+
+  <!-- LIBRARY TAB -->
+  <section class="panel" id="tab-library">
+    <div class="section-head">
+      <h2>Recipe Library</h2>
+      <p class="muted">Save by URL or add manually. Organized by cuisine and main ingredient.</p>
+    </div>
+
+    <div class="add-recipe-card">
+      <div class="url-row">
+        <input type="url" id="urlInput" placeholder="Paste a recipe URL…" autocomplete="off">
+        <button class="primary-btn" id="fetchBtn">Fetch</button>
+      </div>
+      <button class="link-btn" id="manualToggle">+ Add manually</button>
+      <div class="manual-form" id="manualForm" style="display:none">
+        <input type="text" id="mTitle" placeholder="Recipe title">
+        <input type="text" id="mImage" placeholder="Image URL (optional)">
+        <div class="form-row">
+          <input type="text" id="mCuisine" placeholder="Cuisine (e.g. Italian)">
+          <input type="text" id="mMain" placeholder="Main ingredient (e.g. Chicken)">
+        </div>
+        <div class="form-row">
+          <input type="text" id="mTime" placeholder="Total time (e.g. 45 min)">
+          <input type="text" id="mYield" placeholder="Yield (e.g. 4 servings)">
+        </div>
+        <textarea id="mIngredients" placeholder="Ingredients (one per line)" rows="4"></textarea>
+        <textarea id="mInstructions" placeholder="Instructions (one step per line)" rows="4"></textarea>
+        <input type="url" id="mUrl" placeholder="Source URL (optional)">
+        <button class="primary-btn" id="saveManualBtn">Save Recipe</button>
+      </div>
+      <div class="fetch-status" id="fetchStatus"></div>
+    </div>
+
+    <div class="filter-bar">
+      <input type="search" id="searchInput" placeholder="Search recipes…">
+      <select id="groupBy">
+        <option value="cuisine">Group by Cuisine</option>
+        <option value="main">Group by Main Ingredient</option>
+        <option value="made">Group by Made / Not Made</option>
+        <option value="none">No Grouping</option>
+      </select>
+    </div>
+
+    <div id="libraryContainer"></div>
+    <div class="empty-state" id="libraryEmpty" style="display:none">
+      <p>No recipes saved yet.</p>
+      <p class="muted">Paste a URL above to get started.</p>
+    </div>
+  </section>
+
+  <!-- KITCHEN TAB -->
+  <section class="panel" id="tab-kitchen">
+    <div class="section-head">
+      <h2>Kitchen</h2>
+      <p class="muted">What's in your fridge and pantry right now.</p>
+    </div>
+    <div class="kitchen-add">
+      <input type="text" id="pantryInput" placeholder="Add an item (e.g. tomatoes)">
+      <select id="pantryLocation">
+        <option value="fridge">Fridge</option>
+        <option value="pantry">Pantry</option>
+        <option value="freezer">Freezer</option>
+      </select>
+      <button class="primary-btn" id="addPantryBtn">Add</button>
+    </div>
+    <div class="kitchen-sections">
+      <div class="kitchen-col">
+        <h3>Fridge</h3>
+        <ul class="pantry-list" id="fridgeList"></ul>
+      </div>
+      <div class="kitchen-col">
+        <h3>Pantry</h3>
+        <ul class="pantry-list" id="pantryList"></ul>
+      </div>
+      <div class="kitchen-col">
+        <h3>Freezer</h3>
+        <ul class="pantry-list" id="freezerList"></ul>
+      </div>
+    </div>
+  </section>
+
+  <!-- SHOPPING TAB -->
+  <section class="panel" id="tab-shopping">
+    <div class="section-head">
+      <h2>Shopping List</h2>
+      <p class="muted">Items needed for upcoming cooking.</p>
+    </div>
+    <div class="kitchen-add">
+      <input type="text" id="shopInput" placeholder="Add an item">
+      <button class="primary-btn" id="addShopBtn">Add</button>
+    </div>
+    <ul class="shopping-list" id="shoppingList"></ul>
+    <button class="link-btn" id="clearCheckedBtn">Clear checked items</button>
+  </section>
+</main>
+
+<!-- RECIPE DETAIL MODAL -->
+<div class="modal" id="recipeModal">
+  <div class="modal-card">
+    <button class="modal-close" id="modalClose">×</button>
+    <div id="modalContent"></div>
+  </div>
+</div>
+
+<!-- IMPORT/EXPORT MODAL -->
+<div class="modal" id="ioModal">
+  <div class="modal-card">
+    <button class="modal-close" id="ioClose">×</button>
+    <h2 class="modal-title">Backup & Restore</h2>
+    <p class="muted">Export your data to a JSON file you can save or share. Import to restore from a previous backup.</p>
+    <div class="io-actions">
+      <button class="primary-btn" id="exportBtn">Export All Data</button>
+      <label class="primary-btn outline" for="importFile">Import from File</label>
+      <input type="file" id="importFile" accept="application/json,.json" style="display:none">
+    </div>
+    <p class="io-note muted" id="ioNote"></p>
+  </div>
+</div>
+
+<!-- TOAST -->
+<div class="toast" id="toast"></div>
+
+<script src="app.js"></script>
+</body>
+</html>
