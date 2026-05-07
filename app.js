@@ -153,7 +153,53 @@ function pantryMatchesIngredient(pantryItems, ingredientText) {
   return null;
 }
 
-// ----- Perishable detection -----
+// Mini-sheet for what to do when tapping an expiry badge.
+// Resolves to 'extend' | 'reset' | 'clear' | null.
+function pickExpiryAction(item) {
+  return new Promise(resolve => {
+    const sheet = document.createElement('div');
+    sheet.className = 'modal location-picker open';
+    const days = daysUntilExpiry(item);
+    const status = days === null ? 'No expiry'
+      : days < 0 ? `Expired ${Math.abs(days)} day${Math.abs(days) === 1 ? '' : 's'} ago`
+      : days === 0 ? 'Expires today'
+      : `${days} day${days === 1 ? '' : 's'} left`;
+    sheet.innerHTML = `
+      <div class="modal-card location-card">
+        <div class="modal-scroll">
+          <h2 class="picker-title">${escapeHtml(item.name)}</h2>
+          <p class="picker-hint" style="margin-bottom:14px">Currently: ${escapeHtml(status)}</p>
+          <div class="picker-stack">
+            <button class="picker-row-btn" data-choice="extend">
+              <span>+ Extend by N days</span>
+              <span class="picker-row-hint">Push the expiry date out</span>
+            </button>
+            <button class="picker-row-btn" data-choice="reset">
+              <span>↻ Reset to N days from now</span>
+              <span class="picker-row-hint">Replace with a fresh count</span>
+            </button>
+            <button class="picker-row-btn danger" data-choice="clear">
+              <span>✕ Clear expiry</span>
+              <span class="picker-row-hint">Remove the date entirely</span>
+            </button>
+          </div>
+          <button class="primary-btn outline picker-cancel">Cancel</button>
+        </div>
+      </div>
+    `;
+    document.body.appendChild(sheet);
+    const cleanup = (val) => {
+      sheet.classList.remove('open');
+      setTimeout(() => sheet.remove(), 200);
+      resolve(val);
+    };
+    sheet.querySelectorAll('.picker-row-btn').forEach(btn => {
+      btn.addEventListener('click', () => cleanup(btn.dataset.choice));
+    });
+    sheet.querySelector('.picker-cancel').addEventListener('click', () => cleanup(null));
+    sheet.addEventListener('click', e => { if (e.target === sheet) cleanup(null); });
+  });
+}
 // Auto-flag items as perishable based on their name. Default shelf-life by
 // category in days (rough estimates the user can override later).
 const PERISHABLE_RULES = [
@@ -192,19 +238,32 @@ function daysUntilExpiry(item) {
 // Build the visual badge HTML for an item's expiry status
 function expiryBadgeHtml(item) {
   if (!item.expiresAt) return '';
+  return `<span class="expiry-badge ${expiryStatusClass(item)}">${expiryLabel(item)}</span>`;
+}
+
+// Inner content (label only) for use inside an interactive button-shaped badge.
+// We attach the status class to the wrapping button instead.
+function expiryBadgeInner(item) {
+  if (!item.expiresAt) return '';
+  return expiryLabel(item);
+}
+
+function expiryStatusClass(item) {
   const days = daysUntilExpiry(item);
   if (days === null) return '';
-  if (days < 0) {
-    return `<span class="expiry-badge expired">Expired ${Math.abs(days)}d ago</span>`;
-  } else if (days === 0) {
-    return `<span class="expiry-badge danger">Use today</span>`;
-  } else if (days <= 2) {
-    return `<span class="expiry-badge danger">${days}d left</span>`;
-  } else if (days <= 5) {
-    return `<span class="expiry-badge warning">${days}d left</span>`;
-  } else {
-    return `<span class="expiry-badge">${days}d left</span>`;
-  }
+  if (days < 0) return 'expired';
+  if (days === 0) return 'danger';
+  if (days <= 2) return 'danger';
+  if (days <= 5) return 'warning';
+  return '';
+}
+
+function expiryLabel(item) {
+  const days = daysUntilExpiry(item);
+  if (days === null) return '';
+  if (days < 0) return `Expired ${Math.abs(days)}d ago`;
+  if (days === 0) return 'Use today';
+  return `${days}d left`;
 }
 
 // Sensible starter lists. These appear in the dropdowns even before any
@@ -1309,10 +1368,10 @@ function renderPantry() {
     li.innerHTML = `
       <input type="checkbox" ${item.used?'checked':''}>
       <span class="item-name">${escapeHtml(item.name)}</span>
-      ${expiryBadgeHtml(item)}
+      ${item.expiresAt ? `<button class="expiry-badge-btn" data-action="expiryMenu">${expiryBadgeInner(item)}</button>` : ''}
       <div class="item-actions">
         <button class="mini-btn" data-action="edit">✎ Edit</button>
-        ${item.expiresAt ? '<button class="mini-btn" data-action="extend">+ Days</button>' : '<button class="mini-btn" data-action="addExpiry">Expiry</button>'}
+        ${!item.expiresAt ? '<button class="mini-btn" data-action="addExpiry">Expiry</button>' : ''}
         <button class="mini-btn" data-action="shop">+ Shop</button>
         <button class="mini-btn danger" data-action="delete">×</button>
       </div>
@@ -1362,15 +1421,34 @@ function renderPantry() {
           state.pantry = state.pantry.filter(x => x.id !== item.id);
           renderPantry();
           renderShopping();
-        } else if (action === 'extend') {
-          const more = prompt('Extend expiry by how many days?', '3');
-          if (!more) return;
-          const n = parseInt(more, 10);
-          if (!isNaN(n) && n > 0) {
-            const base = (item.expiresAt && item.expiresAt > Date.now()) ? item.expiresAt : Date.now();
-            item.expiresAt = base + n * 24 * 60 * 60 * 1000;
+        } else if (action === 'expiryMenu') {
+          // Tapping the expiry badge: extend, change, or clear
+          const choice = await pickExpiryAction(item);
+          if (choice === 'extend') {
+            const more = prompt('Extend expiry by how many days?', '3');
+            if (!more) return;
+            const n = parseInt(more, 10);
+            if (!isNaN(n) && n > 0) {
+              const base = (item.expiresAt && item.expiresAt > Date.now()) ? item.expiresAt : Date.now();
+              item.expiresAt = base + n * 24 * 60 * 60 * 1000;
+              await dbPut('pantry', item);
+              renderPantry();
+            }
+          } else if (choice === 'reset') {
+            const days = prompt('How many days from now?', '5');
+            if (!days) return;
+            const n = parseInt(days, 10);
+            if (!isNaN(n) && n > 0) {
+              item.expiresAt = Date.now() + n * 24 * 60 * 60 * 1000;
+              await dbPut('pantry', item);
+              renderPantry();
+            }
+          } else if (choice === 'clear') {
+            delete item.expiresAt;
+            delete item.perishableKind;
             await dbPut('pantry', item);
             renderPantry();
+            toast('Expiry cleared');
           }
         } else if (action === 'addExpiry') {
           const days = prompt('How many days until this expires?', '5');
