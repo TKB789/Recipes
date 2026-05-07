@@ -95,6 +95,76 @@ document.querySelectorAll('.tab').forEach(btn => {
   });
 });
 
+// Sensible starter lists. These appear in the dropdowns even before any
+// recipes are saved, plus any user-created values get merged in.
+const DEFAULT_CUISINES = [
+  'American','Chinese','French','Greek','Indian','Indonesian','Italian',
+  'Japanese','Korean','Mediterranean','Mexican','Middle Eastern',
+  'Spanish','Thai','Vietnamese'
+];
+const DEFAULT_MAIN_INGREDIENTS = [
+  'Beef','Chicken','Duck','Egg','Fish','Lamb','Pasta','Pork','Rice',
+  'Salmon','Shrimp','Tofu','Turkey','Vegetable'
+];
+
+// Returns a sorted list of unique values for a field, combining defaults
+// with values found across saved recipes. Empty/Other are filtered out
+// because they get a separate "Other / Add new" option in the dropdown.
+function uniqueRecipeValues(field, defaults) {
+  const set = new Set(defaults);
+  for (const r of state.recipes) {
+    const v = (r[field] || '').trim();
+    if (v && v.toLowerCase() !== 'other') set.add(v);
+  }
+  return Array.from(set).sort((a, b) => a.localeCompare(b));
+}
+
+// Builds a <select> for cuisine or main ingredient, with the current value
+// pre-selected. Includes "+ Add new…" which reveals a paired text input.
+function buildSelectField({ id, field, defaults, currentValue, placeholder }) {
+  const options = uniqueRecipeValues(field, defaults);
+  const current = (currentValue || '').trim();
+  const isCustom = current && current.toLowerCase() !== 'other' && !options.includes(current);
+  // If the current value isn't in the defaults or recipes, surface it anyway
+  if (isCustom) options.push(current);
+  options.sort((a, b) => a.localeCompare(b));
+
+  const opts = options.map(opt =>
+    `<option value="${escapeAttr(opt)}" ${opt === current ? 'selected' : ''}>${escapeHtml(opt)}</option>`
+  ).join('');
+
+  return `
+    <select id="${id}" class="edit-select" data-custom-input="${id}_custom">
+      <option value="" ${!current ? 'selected' : ''}>— Select —</option>
+      ${opts}
+      <option value="__new__">+ Add new…</option>
+    </select>
+    <input type="text" id="${id}_custom" class="edit-custom-input" placeholder="${escapeAttr(placeholder)}" style="display:none;margin-top:6px">
+  `;
+}
+
+// Wires up a select+custom-input pair: when "Add new…" is chosen, reveal the
+// text input. Returns a getValue() function that gives the final string.
+function wireSelectField(selectId) {
+  const sel = document.getElementById(selectId);
+  const custom = document.getElementById(selectId + '_custom');
+  if (!sel || !custom) return () => '';
+  const sync = () => {
+    if (sel.value === '__new__') {
+      custom.style.display = '';
+      custom.focus();
+    } else {
+      custom.style.display = 'none';
+      custom.value = '';
+    }
+  };
+  sel.addEventListener('change', sync);
+  return () => {
+    if (sel.value === '__new__') return custom.value.trim();
+    return sel.value.trim();
+  };
+}
+
 /* =====================================================
    RECIPE EXTRACTION FROM URL
    Tries multiple CORS proxies, parses JSON-LD schema.
@@ -324,9 +394,27 @@ function setStatus(msg, cls='') {
 }
 
 // Manual entry
+let manualGetCuisine = () => '';
+let manualGetMain = () => '';
+
 document.getElementById('manualToggle').addEventListener('click', () => {
   const f = document.getElementById('manualForm');
-  f.style.display = f.style.display === 'none' ? 'flex' : 'none';
+  const opening = f.style.display === 'none';
+  f.style.display = opening ? 'flex' : 'none';
+  if (opening) {
+    // Re-build the dropdowns each time the form opens so they reflect any
+    // newly-added cuisines/ingredients from edits or other recipes.
+    document.getElementById('mCuisineSlot').innerHTML = buildSelectField({
+      id: 'mCuisine', field: 'cuisine', defaults: DEFAULT_CUISINES,
+      currentValue: '', placeholder: 'New cuisine name'
+    });
+    document.getElementById('mMainSlot').innerHTML = buildSelectField({
+      id: 'mMain', field: 'mainIngredient', defaults: DEFAULT_MAIN_INGREDIENTS,
+      currentValue: '', placeholder: 'New ingredient name'
+    });
+    manualGetCuisine = wireSelectField('mCuisine');
+    manualGetMain = wireSelectField('mMain');
+  }
 });
 
 document.getElementById('saveManualBtn').addEventListener('click', async () => {
@@ -336,8 +424,8 @@ document.getElementById('saveManualBtn').addEventListener('click', async () => {
     id: uid(),
     title,
     image: document.getElementById('mImage').value.trim(),
-    cuisine: document.getElementById('mCuisine').value.trim() || 'Other',
-    mainIngredient: document.getElementById('mMain').value.trim() || 'Other',
+    cuisine: manualGetCuisine() || 'Other',
+    mainIngredient: manualGetMain() || 'Other',
     totalTime: document.getElementById('mTime').value.trim(),
     yield: document.getElementById('mYield').value.trim(),
     ingredients: document.getElementById('mIngredients').value.split('\n').map(s=>s.trim()).filter(Boolean),
@@ -350,7 +438,7 @@ document.getElementById('saveManualBtn').addEventListener('click', async () => {
   };
   await dbPut('recipes', recipe);
   state.recipes.push(recipe);
-  ['mTitle','mImage','mCuisine','mMain','mTime','mYield','mIngredients','mInstructions','mUrl']
+  ['mTitle','mImage','mTime','mYield','mIngredients','mInstructions','mUrl']
     .forEach(id => document.getElementById(id).value = '');
   document.getElementById('manualForm').style.display = 'none';
   toast('Recipe saved');
@@ -513,9 +601,18 @@ modal.addEventListener('click', (e) => { if (e.target === modal) closeModal(); }
 
 function closeModal() { modal.classList.remove('open'); }
 
-function openRecipe(id) {
+function openRecipe(id, mode='view') {
   const r = state.recipes.find(x => x.id === id);
   if (!r) return;
+  if (mode === 'edit') {
+    renderRecipeEdit(r);
+  } else {
+    renderRecipeView(r);
+  }
+  modal.classList.add('open');
+}
+
+function renderRecipeView(r) {
   const img = r.image ? `<div class="detail-image" style="background-image:url('${escapeAttr(r.image)}')"></div>` : '';
   const ingredientsList = (r.ingredients||[]).map(i => `<li>${escapeHtml(i)}</li>`).join('') || '<li class="muted">None listed</li>';
   const instructionsList = (r.instructions||[]).map(i => `<li>${escapeHtml(i)}</li>`).join('') || '<li class="muted">None listed</li>';
@@ -532,6 +629,7 @@ function openRecipe(id) {
     <div class="detail-toggles">
       <button class="toggle-btn ${r.inRotation?'on':''}" id="toggleRotation">${r.inRotation?'★ In Rotation':'☆ Add to Rotation'}</button>
       <button class="toggle-btn olive ${r.made?'on':''}" id="toggleMade">${r.made?'✓ Made':'○ Mark as Made'}</button>
+      <button class="toggle-btn" id="editRecipeBtn">✎ Edit</button>
     </div>
     <div class="detail-section">
       <h3>Ingredients</h3>
@@ -552,12 +650,13 @@ function openRecipe(id) {
       <button class="primary-btn outline" id="deleteRecipeBtn" style="border-color:var(--terracotta);color:var(--terracotta)">Delete</button>
     </div>
   `;
-  modal.classList.add('open');
+  // Scroll to top when re-rendering after edits
+  document.querySelector('.modal-scroll').scrollTop = 0;
 
   document.getElementById('toggleRotation').addEventListener('click', async () => {
     r.inRotation = !r.inRotation;
     await dbPut('recipes', r);
-    openRecipe(id);
+    renderRecipeView(r);
     renderRotation();
     renderLibrary();
     toast(r.inRotation ? 'Added to rotation' : 'Removed from rotation');
@@ -565,8 +664,11 @@ function openRecipe(id) {
   document.getElementById('toggleMade').addEventListener('click', async () => {
     r.made = !r.made;
     await dbPut('recipes', r);
-    openRecipe(id);
+    renderRecipeView(r);
     renderLibrary();
+  });
+  document.getElementById('editRecipeBtn').addEventListener('click', () => {
+    renderRecipeEdit(r);
   });
   document.getElementById('saveNotesBtn').addEventListener('click', async () => {
     r.notes = document.getElementById('recipeNotes').value;
@@ -594,6 +696,92 @@ function openRecipe(id) {
       renderShopping();
     });
   }
+}
+
+function renderRecipeEdit(r) {
+  const ingredientsText = (r.ingredients||[]).join('\n');
+  const instructionsText = (r.instructions||[]).join('\n');
+  const imgPreview = r.image
+    ? `<div class="detail-image" style="background-image:url('${escapeAttr(r.image)}')"></div>`
+    : '';
+
+  modalContent.innerHTML = `
+    ${imgPreview}
+    <div class="edit-form">
+      <h2 class="modal-title" style="margin-bottom:14px">Edit Recipe</h2>
+
+      <label class="edit-label">Title</label>
+      <input type="text" id="eTitle" value="${escapeAttr(r.title||'')}" placeholder="Recipe title">
+
+      <label class="edit-label">Image URL</label>
+      <input type="url" id="eImage" value="${escapeAttr(r.image||'')}" placeholder="https://…">
+
+      <div class="edit-row">
+        <div>
+          <label class="edit-label">Cuisine</label>
+          ${buildSelectField({ id: 'eCuisine', field: 'cuisine', defaults: DEFAULT_CUISINES, currentValue: r.cuisine, placeholder: 'New cuisine name' })}
+        </div>
+        <div>
+          <label class="edit-label">Main Ingredient</label>
+          ${buildSelectField({ id: 'eMain', field: 'mainIngredient', defaults: DEFAULT_MAIN_INGREDIENTS, currentValue: r.mainIngredient, placeholder: 'New ingredient name' })}
+        </div>
+      </div>
+
+      <div class="edit-row">
+        <div>
+          <label class="edit-label">Total Time</label>
+          <input type="text" id="eTime" value="${escapeAttr(r.totalTime||'')}" placeholder="45 min">
+        </div>
+        <div>
+          <label class="edit-label">Yield</label>
+          <input type="text" id="eYield" value="${escapeAttr(r.yield||'')}" placeholder="4 servings">
+        </div>
+      </div>
+
+      <label class="edit-label">Ingredients <span class="muted">(one per line)</span></label>
+      <textarea id="eIngredients" rows="8" placeholder="1 cup flour&#10;2 eggs&#10;…">${escapeHtml(ingredientsText)}</textarea>
+
+      <label class="edit-label">Instructions <span class="muted">(one step per line)</span></label>
+      <textarea id="eInstructions" rows="8" placeholder="Preheat oven&#10;Mix wet ingredients&#10;…">${escapeHtml(instructionsText)}</textarea>
+
+      <label class="edit-label">Source URL</label>
+      <input type="url" id="eSourceUrl" value="${escapeAttr(r.sourceUrl||'')}" placeholder="https://…">
+
+      <div class="detail-actions">
+        <button class="primary-btn" id="saveEditBtn">Save Changes</button>
+        <button class="primary-btn outline" id="cancelEditBtn">Cancel</button>
+      </div>
+    </div>
+  `;
+  document.querySelector('.modal-scroll').scrollTop = 0;
+
+  const getCuisine = wireSelectField('eCuisine');
+  const getMain = wireSelectField('eMain');
+
+  document.getElementById('saveEditBtn').addEventListener('click', async () => {
+    r.title = document.getElementById('eTitle').value.trim() || r.title;
+    r.image = document.getElementById('eImage').value.trim();
+    r.cuisine = getCuisine() || 'Other';
+    r.mainIngredient = getMain() || 'Other';
+    r.totalTime = document.getElementById('eTime').value.trim();
+    r.yield = document.getElementById('eYield').value.trim();
+    r.ingredients = document.getElementById('eIngredients').value.split('\n').map(s=>s.trim()).filter(Boolean);
+    r.instructions = document.getElementById('eInstructions').value.split('\n').map(s=>s.trim()).filter(Boolean);
+    r.sourceUrl = document.getElementById('eSourceUrl').value.trim();
+
+    // Bust the wheel image cache for this URL so the new image redraws
+    if (r.image && imageCache.has(r.image)) imageCache.delete(r.image);
+
+    await dbPut('recipes', r);
+    toast('Recipe updated');
+    renderRecipeView(r);
+    renderLibrary();
+    renderRotation();
+  });
+
+  document.getElementById('cancelEditBtn').addEventListener('click', () => {
+    renderRecipeView(r);
+  });
 }
 
 /* =====================================================

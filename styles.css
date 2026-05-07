@@ -738,6 +738,89 @@ main { padding: 20px 18px; max-width: 900px; margin: 0 auto; }
 }
 .detail-source a { color: var(--terracotta-deep); }
 
+/* Edit form inside recipe modal */
+.edit-form {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+}
+.edit-label {
+  display: block;
+  font-family: 'Fraunces', serif;
+  font-style: italic;
+  font-size: 14px;
+  color: var(--terracotta-deep);
+  margin: 12px 0 4px;
+}
+.edit-form input[type="text"],
+.edit-form input[type="url"],
+.edit-form textarea {
+  width: 100%;
+  border: 1px solid var(--line);
+  background: var(--cream);
+  border-radius: 10px;
+  padding: 10px 14px;
+  font-family: inherit;
+  font-size: 15px;
+  color: var(--ink);
+  box-sizing: border-box;
+}
+.edit-form textarea {
+  resize: vertical;
+  line-height: 1.5;
+  font-family: inherit;
+}
+.edit-form input:focus, .edit-form textarea:focus {
+  outline: 2px solid var(--saffron);
+  outline-offset: 1px;
+}
+.edit-row {
+  display: flex;
+  gap: 10px;
+}
+.edit-row > div {
+  flex: 1;
+  min-width: 0;
+}
+
+/* Select dropdowns for cuisine / main ingredient */
+.edit-select, .manual-form select {
+  width: 100%;
+  border: 1px solid var(--line);
+  background: var(--cream);
+  border-radius: 10px;
+  padding: 10px 14px;
+  font-family: inherit;
+  font-size: 15px;
+  color: var(--ink);
+  box-sizing: border-box;
+  -webkit-appearance: none;
+  appearance: none;
+  background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='12' height='8' viewBox='0 0 12 8'%3E%3Cpath fill='%238a7e6e' d='M6 8L0 0h12z'/%3E%3C/svg%3E");
+  background-repeat: no-repeat;
+  background-position: right 14px center;
+  padding-right: 36px;
+}
+.edit-select:focus, .manual-form select:focus {
+  outline: 2px solid var(--saffron);
+  outline-offset: 1px;
+}
+.edit-custom-input {
+  width: 100%;
+  border: 1px solid var(--terracotta);
+  background: var(--cream);
+  border-radius: 10px;
+  padding: 10px 14px;
+  font-family: inherit;
+  font-size: 15px;
+  color: var(--ink);
+  box-sizing: border-box;
+}
+.edit-custom-input:focus {
+  outline: 2px solid var(--saffron);
+  outline-offset: 1px;
+}
+
 .add-ingredients-btn {
   margin-top: 8px;
   font-size: 13px;
