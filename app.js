@@ -382,9 +382,49 @@ function recipeCardHtml(r) {
           ${r.yield ? `<span>👥 ${escapeHtml(r.yield)}</span>` : ''}
         </div>
         ${tags.length ? `<div class="recipe-tags">${tags.join('')}</div>` : ''}
+        <div class="card-actions">
+          <button class="card-action ${r.inRotation ? 'on' : ''}" data-action="rotation" data-id="${r.id}">
+            ${r.inRotation ? '★ In Rotation' : '☆ Rotation'}
+          </button>
+          <button class="card-action olive ${r.made ? 'on' : ''}" data-action="made" data-id="${r.id}">
+            ${r.made ? '✓ Made' : '○ Made'}
+          </button>
+        </div>
       </div>
     </article>
   `;
+}
+
+// Wire up clicks on a container of recipe cards. Handles both the card-tap-to-open
+// flow and the inline action buttons (which must NOT also trigger the open).
+function wireCardClicks(container) {
+  container.querySelectorAll('.recipe-card').forEach(card => {
+    card.addEventListener('click', (e) => {
+      // Ignore clicks on the action buttons
+      if (e.target.closest('.card-action')) return;
+      openRecipe(card.dataset.id);
+    });
+  });
+  container.querySelectorAll('.card-action').forEach(btn => {
+    btn.addEventListener('click', async (e) => {
+      e.stopPropagation();
+      const id = btn.dataset.id;
+      const action = btn.dataset.action;
+      const recipe = state.recipes.find(x => x.id === id);
+      if (!recipe) return;
+      if (action === 'rotation') {
+        recipe.inRotation = !recipe.inRotation;
+        await dbPut('recipes', recipe);
+        toast(recipe.inRotation ? 'Added to rotation' : 'Removed from rotation');
+      } else if (action === 'made') {
+        recipe.made = !recipe.made;
+        await dbPut('recipes', recipe);
+        toast(recipe.made ? 'Marked as made' : 'Unmarked');
+      }
+      renderRotation();
+      renderLibrary();
+    });
+  });
 }
 
 function renderRotation() {
@@ -397,13 +437,12 @@ function renderRotation() {
   } else {
     empty.style.display = 'none';
     grid.innerHTML = inRot.map(recipeCardHtml).join('');
-    grid.querySelectorAll('.recipe-card').forEach(c => {
-      c.addEventListener('click', () => openRecipe(c.dataset.id));
-      // Re-apply winner highlight if this card was the last winner
-      if (lastWinnerId && c.dataset.id === lastWinnerId) {
-        c.classList.add('winner');
-      }
-    });
+    wireCardClicks(grid);
+    // Re-apply winner highlight if a card was the last winner
+    if (lastWinnerId) {
+      const card = grid.querySelector(`.recipe-card[data-id="${lastWinnerId}"]`);
+      if (card) card.classList.add('winner');
+    }
   }
   drawWheel();
 }
@@ -451,9 +490,8 @@ function renderLibrary() {
       </div>
     `).join('');
   }
-  container.querySelectorAll('.recipe-card').forEach(c => {
-    c.addEventListener('click', () => openRecipe(c.dataset.id));
-  });
+  container.querySelectorAll('.recipe-card');
+  wireCardClicks(container);
 }
 
 document.getElementById('searchInput').addEventListener('input', e => {

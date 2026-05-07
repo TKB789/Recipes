@@ -147,23 +147,27 @@
 <!-- RECIPE DETAIL MODAL -->
 <div class="modal" id="recipeModal">
   <div class="modal-card">
-    <button class="modal-close" id="modalClose">×</button>
-    <div id="modalContent"></div>
+    <button class="modal-close" id="modalClose" aria-label="Close">×</button>
+    <div class="modal-scroll">
+      <div id="modalContent"></div>
+    </div>
   </div>
 </div>
 
 <!-- IMPORT/EXPORT MODAL -->
 <div class="modal" id="ioModal">
   <div class="modal-card">
-    <button class="modal-close" id="ioClose">×</button>
-    <h2 class="modal-title">Backup & Restore</h2>
-    <p class="muted">Export your data to a JSON file you can save or share. Import to restore from a previous backup.</p>
-    <div class="io-actions">
-      <button class="primary-btn" id="exportBtn">Export All Data</button>
-      <label class="primary-btn outline" for="importFile">Import from File</label>
-      <input type="file" id="importFile" accept="application/json,.json" style="display:none">
+    <button class="modal-close" id="ioClose" aria-label="Close">×</button>
+    <div class="modal-scroll">
+      <h2 class="modal-title">Backup & Restore</h2>
+      <p class="muted">Export your data to a JSON file you can save or share. Import to restore from a previous backup.</p>
+      <div class="io-actions">
+        <button class="primary-btn" id="exportBtn">Export All Data</button>
+        <label class="primary-btn outline" for="importFile">Import from File</label>
+        <input type="file" id="importFile" accept="application/json,.json" style="display:none">
+      </div>
+      <p class="io-note muted" id="ioNote"></p>
     </div>
-    <p class="io-note muted" id="ioNote"></p>
   </div>
 </div>
 
