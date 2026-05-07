@@ -5,7 +5,7 @@
 <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
 <meta name="theme-color" content="#f5efe6">
 <title>SpicyCitrus — Your Recipe Kitchen</title>
-<link rel="stylesheet" href="styles.css?v=14">
+<link rel="stylesheet" href="styles.css?v=16">
 <link href="https://fonts.googleapis.com/css2?family=Fraunces:opsz,wght@9..144,400;9..144,500;9..144,600;9..144,700;9..144,900&family=Inter:wght@400;500;600;700&display=swap" rel="stylesheet">
 </head>
 <body>
@@ -122,6 +122,7 @@
       </select>
       <button class="primary-btn" id="addPantryBtn">Add</button>
     </div>
+    <button class="primary-btn make-btn" id="whatCanIMakeBtn">🍳 What can I make?</button>
     <div class="kitchen-sections">
       <div class="kitchen-col">
         <h3>Fridge</h3>
@@ -180,12 +181,25 @@
   </div>
 </div>
 
+<!-- WHAT CAN I MAKE MODAL -->
+<div class="modal" id="makeModal">
+  <div class="modal-card">
+    <button class="modal-close" id="makeClose" aria-label="Close">×</button>
+    <div class="modal-scroll">
+      <h2 class="modal-title">What can I make?</h2>
+      <p class="muted" id="makeIntro">Recipes ranked by what you have on hand.</p>
+      <div class="make-tabs" id="makeTabs"></div>
+      <div id="makeResults"></div>
+    </div>
+  </div>
+</div>
+
 <!-- TOAST -->
 <div class="toast" id="toast"></div>
 
 <!-- BACK TO TOP -->
 <button class="back-to-top" id="backToTopBtn" aria-label="Back to top">↑</button>
 
-<script src="app.js?v=15"></script>
+<script src="app.js?v=16"></script>
 </body>
 </html>

@@ -580,6 +580,7 @@ main { padding: 20px 18px; max-width: 900px; margin: 0 auto; }
   gap: 8px;
   padding: 8px 0;
   border-bottom: 1px solid var(--line);
+  flex-wrap: wrap;
 }
 .pantry-item:last-child, .shopping-item:last-child { border-bottom: none; }
 .pantry-item input[type="checkbox"], .shopping-item input[type="checkbox"] {
@@ -590,6 +591,7 @@ main { padding: 20px 18px; max-width: 900px; margin: 0 auto; }
 .pantry-item .item-name, .shopping-item .item-name {
   flex: 1;
   font-size: 15px;
+  min-width: 0;
 }
 .pantry-item.used .item-name, .shopping-item.checked .item-name {
   text-decoration: line-through;
@@ -598,6 +600,7 @@ main { padding: 20px 18px; max-width: 900px; margin: 0 auto; }
 .pantry-item .item-actions, .shopping-item .item-actions {
   display: flex;
   gap: 4px;
+  flex-wrap: wrap;
 }
 .mini-btn {
   background: transparent;
@@ -608,9 +611,144 @@ main { padding: 20px 18px; max-width: 900px; margin: 0 auto; }
   font-family: inherit;
   color: var(--ink-soft);
   cursor: pointer;
+  white-space: nowrap;
 }
 .mini-btn:active { background: var(--cream-deep); }
 .mini-btn.danger { color: var(--terracotta); }
+.mini-btn.terra { background: var(--terracotta); color: var(--paper); border-color: var(--terracotta); }
+
+/* "In kitchen" badge for shopping items already on hand */
+.in-kitchen-badge {
+  display: inline-flex;
+  align-items: center;
+  gap: 3px;
+  background: var(--olive);
+  color: var(--paper);
+  border-radius: 999px;
+  padding: 2px 8px;
+  font-size: 10px;
+  font-weight: 600;
+  letter-spacing: 0.04em;
+  text-transform: uppercase;
+  flex-shrink: 0;
+}
+.shopping-item.in-kitchen .item-name {
+  color: var(--ink-soft);
+}
+
+/* Perishable expiry badges in kitchen items */
+.expiry-badge {
+  display: inline-flex;
+  align-items: center;
+  gap: 3px;
+  border-radius: 999px;
+  padding: 2px 8px;
+  font-size: 11px;
+  font-weight: 500;
+  flex-shrink: 0;
+  border: 1px solid var(--line);
+  background: var(--cream);
+  color: var(--ink-soft);
+}
+.expiry-badge.warning {
+  background: #fdf2e6;
+  border-color: var(--saffron);
+  color: #8a5a18;
+}
+.expiry-badge.danger {
+  background: #fbe5e0;
+  border-color: var(--terracotta);
+  color: var(--terracotta-deep);
+  font-weight: 600;
+}
+.expiry-badge.expired {
+  background: var(--terracotta-deep);
+  color: var(--paper);
+  border-color: var(--terracotta-deep);
+}
+.pantry-item.expired .item-name {
+  color: var(--terracotta-deep);
+}
+
+/* "What can I make" big button + modal */
+.make-btn {
+  width: 100%;
+  margin-bottom: 16px;
+  background: var(--terracotta);
+  font-size: 15px;
+  padding: 14px 20px;
+}
+.make-tabs {
+  display: flex;
+  gap: 6px;
+  flex-wrap: wrap;
+  margin: 14px 0 18px;
+}
+.make-tab {
+  background: var(--cream);
+  border: 1px solid var(--line);
+  border-radius: 999px;
+  padding: 7px 14px;
+  font-family: inherit;
+  font-size: 13px;
+  cursor: pointer;
+  color: var(--ink-soft);
+  white-space: nowrap;
+}
+.make-tab.active {
+  background: var(--ink);
+  color: var(--paper);
+  border-color: var(--ink);
+}
+.make-recipe {
+  display: flex;
+  gap: 12px;
+  padding: 12px;
+  background: var(--cream);
+  border: 1px solid var(--line);
+  border-radius: var(--radius);
+  margin-bottom: 10px;
+  cursor: pointer;
+  align-items: center;
+}
+.make-recipe:active { background: var(--cream-deep); }
+.make-thumb {
+  width: 60px;
+  height: 60px;
+  border-radius: 10px;
+  background: var(--cream-deep);
+  background-size: cover;
+  background-position: center;
+  flex-shrink: 0;
+}
+.make-info {
+  flex: 1;
+  min-width: 0;
+}
+.make-info-title {
+  font-family: 'Fraunces', serif;
+  font-size: 16px;
+  font-weight: 600;
+  margin: 0 0 4px;
+  line-height: 1.2;
+}
+.make-info-meta {
+  font-size: 12px;
+  color: var(--muted);
+  margin-bottom: 4px;
+}
+.make-missing {
+  font-size: 12px;
+  color: var(--terracotta-deep);
+}
+.make-missing strong { font-weight: 600; }
+.make-ratio {
+  font-size: 11px;
+  color: var(--olive);
+  font-weight: 600;
+  letter-spacing: 0.04em;
+  text-transform: uppercase;
+}
 
 /* ===== MODAL ===== */
 .modal {

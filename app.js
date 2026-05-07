@@ -97,6 +97,116 @@ document.querySelectorAll('.tab').forEach(btn => {
   });
 });
 
+// Words to ignore when matching ingredients (units, prep words, articles).
+// Used by ingredientStem() so "1 lb ground pork" matches pantry "pork".
+const STOP_WORDS = new Set([
+  'a','an','the','of','and','or','to','for','with','in','on','at',
+  'cup','cups','c','tbsp','tablespoon','tablespoons','tsp','teaspoon','teaspoons',
+  'oz','ounce','ounces','lb','lbs','pound','pounds','g','gram','grams','kg','kilo','kilogram',
+  'ml','milliliter','milliliters','l','liter','liters','liter','pint','pints','quart','quarts','gallon',
+  'small','medium','large','big','little','extra',
+  'fresh','frozen','dried','dry','raw','cooked','prepared','ripe',
+  'whole','half','quarter','third','one','two','three','four','five','six','seven','eight','nine','ten',
+  'chopped','minced','diced','sliced','crushed','grated','shredded','peeled','seeded','crumbled',
+  'finely','coarsely','thinly','thickly','roughly',
+  'optional','plus','more','about','approximately','approx','around','almost','plain','pure',
+  'taste','needed','desired','garnish','serving','servings','divided','separated',
+  'package','packages','can','cans','jar','jars','bottle','bottles','bag','bags','box','boxes',
+  'container','containers','pinch','pinches','dash','dashes','handful','handfuls',
+  'lean','boneless','skinless','skin-on','organic','free-range','grass-fed',
+  'see','note','notes','room','temperature','warm','cold','hot','room-temperature'
+]);
+
+// Distill an ingredient line down to its content words for matching.
+// "1 ½ pound skin-on boneless pork belly" -> ["pork", "belly"]
+function ingredientStem(text) {
+  if (!text) return [];
+  return text
+    .toLowerCase()
+    // remove parenthetical notes
+    .replace(/\([^)]*\)/g, ' ')
+    // remove fractions, numbers, slash-fractions
+    .replace(/\d+\s*\/\s*\d+/g, ' ')
+    .replace(/\d+([.,]\d+)?/g, ' ')
+    // unicode fractions (½ ⅓ ¼ ¾ etc.)
+    .replace(/[\u00BC-\u00BE\u2150-\u215E]/g, ' ')
+    // strip non-letter chars (keeps hyphens for compound words like sun-dried)
+    .replace(/[^a-z\s-]/g, ' ')
+    .split(/\s+/)
+    .filter(w => w.length > 1 && !STOP_WORDS.has(w))
+    // strip simple plural/possessive
+    .map(w => w.replace(/'s$/, '').replace(/s$/, ''));
+}
+
+// Does pantry contain an item matching a recipe ingredient?
+// Both go through ingredientStem(); if any non-trivial word overlaps, it's a match.
+function pantryMatchesIngredient(pantryItems, ingredientText) {
+  const wanted = new Set(ingredientStem(ingredientText));
+  if (wanted.size === 0) return null;
+  for (const p of pantryItems) {
+    if (p.used) continue;
+    const have = ingredientStem(p.name);
+    for (const w of have) {
+      if (wanted.has(w)) return p; // first match wins
+    }
+  }
+  return null;
+}
+
+// ----- Perishable detection -----
+// Auto-flag items as perishable based on their name. Default shelf-life by
+// category in days (rough estimates the user can override later).
+const PERISHABLE_RULES = [
+  { match: ['chicken','beef','pork','lamb','turkey','fish','salmon','tuna','shrimp','steak','ground'], days: 3, kind: 'meat' },
+  { match: ['egg','eggs'], days: 21, kind: 'dairy' },
+  { match: ['milk','cream','yogurt','sour','buttermilk'], days: 7, kind: 'dairy' },
+  { match: ['cheese'], days: 14, kind: 'dairy' },
+  { match: ['lettuce','spinach','arugula','kale','greens','herbs','basil','cilantro','parsley','mint','dill','chive'], days: 5, kind: 'leafy' },
+  { match: ['tomato','tomatoes','cucumber','pepper','peppers','zucchini','squash','eggplant','mushroom','mushrooms','asparagus','broccoli','cauliflower','bok'], days: 7, kind: 'veg' },
+  { match: ['berry','berries','strawberry','strawberries','raspberry','raspberries','blueberry','blueberries','blackberry'], days: 4, kind: 'berry' },
+  { match: ['banana','bananas','peach','peaches','plum','plums','nectarine','apricot'], days: 5, kind: 'fruit' },
+  { match: ['apple','apples','orange','oranges','pear','pears','grape','grapes','melon','watermelon','pineapple','mango'], days: 10, kind: 'fruit' },
+  { match: ['carrot','carrots','celery','onion','onions','garlic','potato','potatoes','sweet potato','ginger'], days: 21, kind: 'root' }
+];
+
+// Given an item name, return {perishable: bool, days: number, kind: string} or null
+function detectPerishable(name) {
+  if (!name) return null;
+  const stems = new Set(ingredientStem(name));
+  for (const rule of PERISHABLE_RULES) {
+    for (const m of rule.match) {
+      if (stems.has(m)) return { perishable: true, days: rule.days, kind: rule.kind };
+    }
+  }
+  return null;
+}
+
+// Days remaining until expiry; negative if already expired
+function daysUntilExpiry(item) {
+  if (!item.expiresAt) return null;
+  const now = Date.now();
+  const ms = item.expiresAt - now;
+  return Math.ceil(ms / (1000 * 60 * 60 * 24));
+}
+
+// Build the visual badge HTML for an item's expiry status
+function expiryBadgeHtml(item) {
+  if (!item.expiresAt) return '';
+  const days = daysUntilExpiry(item);
+  if (days === null) return '';
+  if (days < 0) {
+    return `<span class="expiry-badge expired">Expired ${Math.abs(days)}d ago</span>`;
+  } else if (days === 0) {
+    return `<span class="expiry-badge danger">Use today</span>`;
+  } else if (days <= 2) {
+    return `<span class="expiry-badge danger">${days}d left</span>`;
+  } else if (days <= 5) {
+    return `<span class="expiry-badge warning">${days}d left</span>`;
+  } else {
+    return `<span class="expiry-badge">${days}d left</span>`;
+  }
+}
+
 // Sensible starter lists. These appear in the dropdowns even before any
 // recipes are saved, plus any user-created values get merged in.
 const DEFAULT_CUISINES = [
@@ -1162,10 +1272,17 @@ async function addPantryItem() {
   if (!name) return;
   const location = document.getElementById('pantryLocation').value;
   const item = { id: uid(), name, location, used: false, createdAt: Date.now() };
+  // Auto-detect perishability and set initial expiry
+  const detect = detectPerishable(name);
+  if (detect && detect.perishable) {
+    item.expiresAt = Date.now() + detect.days * 24 * 60 * 60 * 1000;
+    item.perishableKind = detect.kind;
+  }
   await dbPut('pantry', item);
   state.pantry.push(item);
   document.getElementById('pantryInput').value = '';
   renderPantry();
+  renderShopping(); // shopping list "in kitchen" badges depend on pantry
 }
 
 function renderPantry() {
@@ -1175,34 +1292,72 @@ function renderPantry() {
     freezer: document.getElementById('freezerList')
   };
   Object.values(lists).forEach(l => l.innerHTML = '');
-  for (const item of state.pantry) {
+  // Sort each location's items: expiring soonest first, then by name
+  const sorted = state.pantry.slice().sort((a, b) => {
+    const ad = daysUntilExpiry(a);
+    const bd = daysUntilExpiry(b);
+    if (ad === null && bd === null) return a.name.localeCompare(b.name);
+    if (ad === null) return 1;
+    if (bd === null) return -1;
+    return ad - bd;
+  });
+  for (const item of sorted) {
     const li = document.createElement('li');
-    li.className = 'pantry-item' + (item.used ? ' used' : '');
+    const days = daysUntilExpiry(item);
+    const isExpired = days !== null && days < 0;
+    li.className = 'pantry-item' + (item.used ? ' used' : '') + (isExpired ? ' expired' : '');
     li.innerHTML = `
       <input type="checkbox" ${item.used?'checked':''}>
       <span class="item-name">${escapeHtml(item.name)}</span>
+      ${expiryBadgeHtml(item)}
       <div class="item-actions">
-        <button class="mini-btn">+ Shop</button>
-        <button class="mini-btn danger">×</button>
+        ${item.expiresAt ? '<button class="mini-btn" data-action="extend">+ Days</button>' : '<button class="mini-btn" data-action="addExpiry">Expiry</button>'}
+        <button class="mini-btn" data-action="shop">+ Shop</button>
+        <button class="mini-btn danger" data-action="delete">×</button>
       </div>
     `;
-    const [cb, _, actions] = li.children;
+    const cb = li.querySelector('input[type="checkbox"]');
     cb.addEventListener('change', async () => {
       item.used = cb.checked;
       await dbPut('pantry', item);
       renderPantry();
-    });
-    actions.children[0].addEventListener('click', async () => {
-      const shop = { id: uid(), name: item.name, checked: false, createdAt: Date.now() };
-      await dbPut('shopping', shop);
-      state.shopping.push(shop);
-      toast('Added to shopping list');
       renderShopping();
     });
-    actions.children[1].addEventListener('click', async () => {
-      await dbDelete('pantry', item.id);
-      state.pantry = state.pantry.filter(x => x.id !== item.id);
-      renderPantry();
+    li.querySelectorAll('button').forEach(btn => {
+      btn.addEventListener('click', async () => {
+        const action = btn.dataset.action;
+        if (action === 'shop') {
+          const shop = { id: uid(), name: item.name, checked: false, createdAt: Date.now() };
+          await dbPut('shopping', shop);
+          state.shopping.push(shop);
+          toast('Added to shopping list');
+          renderShopping();
+        } else if (action === 'delete') {
+          await dbDelete('pantry', item.id);
+          state.pantry = state.pantry.filter(x => x.id !== item.id);
+          renderPantry();
+          renderShopping();
+        } else if (action === 'extend') {
+          const more = prompt('Extend expiry by how many days?', '3');
+          if (!more) return;
+          const n = parseInt(more, 10);
+          if (!isNaN(n) && n > 0) {
+            const base = (item.expiresAt && item.expiresAt > Date.now()) ? item.expiresAt : Date.now();
+            item.expiresAt = base + n * 24 * 60 * 60 * 1000;
+            await dbPut('pantry', item);
+            renderPantry();
+          }
+        } else if (action === 'addExpiry') {
+          const days = prompt('How many days until this expires?', '5');
+          if (!days) return;
+          const n = parseInt(days, 10);
+          if (!isNaN(n) && n > 0) {
+            item.expiresAt = Date.now() + n * 24 * 60 * 60 * 1000;
+            await dbPut('pantry', item);
+            renderPantry();
+          }
+        }
+      });
     });
     (lists[item.location] || lists.pantry).appendChild(li);
   }
@@ -1228,28 +1383,72 @@ function renderShopping() {
   const list = document.getElementById('shoppingList');
   list.innerHTML = '';
   for (const item of state.shopping) {
+    // Check if a matching item already exists in pantry (and isn't used up)
+    const inKitchen = pantryMatchesIngredient(state.pantry, item.name);
     const li = document.createElement('li');
-    li.className = 'shopping-item' + (item.checked ? ' checked' : '');
+    li.className = 'shopping-item'
+      + (item.checked ? ' checked' : '')
+      + (inKitchen ? ' in-kitchen' : '');
     li.innerHTML = `
       <input type="checkbox" ${item.checked?'checked':''}>
       <span class="item-name">${escapeHtml(item.name)}</span>
+      ${inKitchen ? '<span class="in-kitchen-badge">✓ In Kitchen</span>' : ''}
       <div class="item-actions">
-        <button class="mini-btn danger">×</button>
+        <button class="mini-btn terra" data-action="kitchen">→ Kitchen</button>
+        <button class="mini-btn danger" data-action="delete">×</button>
       </div>
     `;
-    const [cb, _, actions] = li.children;
+    const cb = li.querySelector('input[type="checkbox"]');
     cb.addEventListener('change', async () => {
       item.checked = cb.checked;
       await dbPut('shopping', item);
       li.classList.toggle('checked', item.checked);
     });
-    actions.children[0].addEventListener('click', async () => {
-      await dbDelete('shopping', item.id);
-      state.shopping = state.shopping.filter(x => x.id !== item.id);
-      renderShopping();
+    li.querySelectorAll('button').forEach(btn => {
+      btn.addEventListener('click', async () => {
+        const action = btn.dataset.action;
+        if (action === 'kitchen') {
+          await moveShoppingItemToKitchen(item);
+        } else if (action === 'delete') {
+          await dbDelete('shopping', item.id);
+          state.shopping = state.shopping.filter(x => x.id !== item.id);
+          renderShopping();
+        }
+      });
     });
     list.appendChild(li);
   }
+}
+
+async function moveShoppingItemToKitchen(item) {
+  // Quick prompt for location. Default to fridge as the most common case.
+  const where = prompt('Where? Type fridge, pantry, or freezer:', 'fridge');
+  if (!where) return;
+  const loc = where.trim().toLowerCase();
+  if (!['fridge','pantry','freezer'].includes(loc)) {
+    toast('Use fridge, pantry, or freezer');
+    return;
+  }
+  const pantryItem = {
+    id: uid(),
+    name: item.name,
+    location: loc,
+    used: false,
+    createdAt: Date.now()
+  };
+  const detect = detectPerishable(item.name);
+  if (detect && detect.perishable) {
+    pantryItem.expiresAt = Date.now() + detect.days * 24 * 60 * 60 * 1000;
+    pantryItem.perishableKind = detect.kind;
+  }
+  await dbPut('pantry', pantryItem);
+  state.pantry.push(pantryItem);
+  // Remove from shopping list
+  await dbDelete('shopping', item.id);
+  state.shopping = state.shopping.filter(x => x.id !== item.id);
+  renderShopping();
+  renderPantry();
+  toast(`Moved to ${loc}`);
 }
 
 document.getElementById('clearCheckedBtn').addEventListener('click', async () => {
@@ -1259,6 +1458,126 @@ document.getElementById('clearCheckedBtn').addEventListener('click', async () =>
   renderShopping();
   toast(`Cleared ${toRemove.length} items`);
 });
+
+/* =====================================================
+   WHAT CAN I MAKE?
+   ===================================================== */
+const makeModal = document.getElementById('makeModal');
+let makeFilter = 'have-all'; // current "missing N" filter
+
+document.getElementById('whatCanIMakeBtn').addEventListener('click', () => {
+  makeFilter = 'have-all';
+  renderMakeResults();
+  makeModal.classList.add('open');
+});
+document.getElementById('makeClose').addEventListener('click', () => makeModal.classList.remove('open'));
+makeModal.addEventListener('click', (e) => { if (e.target === makeModal) makeModal.classList.remove('open'); });
+
+// Score every recipe by how many ingredients we have on hand vs missing.
+// Returns array of {recipe, missing: [string], have: number, total: number}
+function scoreRecipesByPantry() {
+  const available = state.pantry.filter(p => !p.used);
+  return state.recipes.map(r => {
+    const ingredients = r.ingredients || [];
+    const missing = [];
+    let have = 0;
+    for (const ing of ingredients) {
+      if (pantryMatchesIngredient(available, ing)) {
+        have++;
+      } else {
+        missing.push(ing);
+      }
+    }
+    return { recipe: r, missing, have, total: ingredients.length };
+  }).filter(s => s.total > 0); // skip recipes with no ingredients listed
+}
+
+function renderMakeResults() {
+  const scored = scoreRecipesByPantry();
+  const tabsEl = document.getElementById('makeTabs');
+  const resultsEl = document.getElementById('makeResults');
+
+  // Build dynamic tabs based on what's actually achievable
+  const buckets = { 'have-all': 0, 'missing-1': 0, 'missing-2': 0, 'missing-3': 0, 'missing-more': 0 };
+  for (const s of scored) {
+    const m = s.missing.length;
+    if (m === 0) buckets['have-all']++;
+    else if (m === 1) buckets['missing-1']++;
+    else if (m === 2) buckets['missing-2']++;
+    else if (m === 3) buckets['missing-3']++;
+    else buckets['missing-more']++;
+  }
+
+  const tabDefs = [
+    { key: 'have-all', label: `Ready to cook (${buckets['have-all']})` },
+    { key: 'missing-1', label: `Missing 1 (${buckets['missing-1']})` },
+    { key: 'missing-2', label: `Missing 2 (${buckets['missing-2']})` },
+    { key: 'missing-3', label: `Missing 3 (${buckets['missing-3']})` },
+    { key: 'missing-more', label: `Missing 4+ (${buckets['missing-more']})` }
+  ];
+  tabsEl.innerHTML = tabDefs.map(t =>
+    `<button class="make-tab ${t.key === makeFilter ? 'active' : ''}" data-key="${t.key}">${escapeHtml(t.label)}</button>`
+  ).join('');
+  tabsEl.querySelectorAll('.make-tab').forEach(btn => {
+    btn.addEventListener('click', () => {
+      makeFilter = btn.dataset.key;
+      renderMakeResults();
+    });
+  });
+
+  // Filter to current bucket
+  let filtered = scored.filter(s => {
+    const m = s.missing.length;
+    if (makeFilter === 'have-all') return m === 0;
+    if (makeFilter === 'missing-1') return m === 1;
+    if (makeFilter === 'missing-2') return m === 2;
+    if (makeFilter === 'missing-3') return m === 3;
+    if (makeFilter === 'missing-more') return m >= 4;
+    return true;
+  });
+  // Sort by have-ratio descending, then missing count ascending
+  filtered.sort((a, b) => {
+    const ra = a.have / a.total;
+    const rb = b.have / b.total;
+    if (rb !== ra) return rb - ra;
+    return a.missing.length - b.missing.length;
+  });
+
+  if (!filtered.length) {
+    resultsEl.innerHTML = `
+      <div class="empty-state">
+        <p>Nothing in this bucket.</p>
+        <p class="muted">Try a different "missing" tab, or add more items to your kitchen.</p>
+      </div>
+    `;
+    return;
+  }
+
+  resultsEl.innerHTML = filtered.map(s => {
+    const r = s.recipe;
+    const thumbStyle = r.image ? `style="background-image:url('${escapeAttr(r.image)}')"` : '';
+    const missingLine = s.missing.length === 0
+      ? `<div class="make-ratio">✓ Have all ${s.total} ingredients</div>`
+      : `<div class="make-missing">Missing: <strong>${s.missing.slice(0, 3).map(escapeHtml).join(', ')}${s.missing.length > 3 ? `, +${s.missing.length - 3} more` : ''}</strong></div>`;
+    return `
+      <div class="make-recipe" data-id="${r.id}">
+        <div class="make-thumb" ${thumbStyle}></div>
+        <div class="make-info">
+          <h3 class="make-info-title">${escapeHtml(r.title)}</h3>
+          <div class="make-info-meta">${s.have}/${s.total} ingredients on hand</div>
+          ${missingLine}
+        </div>
+      </div>
+    `;
+  }).join('');
+
+  resultsEl.querySelectorAll('.make-recipe').forEach(el => {
+    el.addEventListener('click', () => {
+      makeModal.classList.remove('open');
+      openRecipe(el.dataset.id);
+    });
+  });
+}
 
 /* =====================================================
    IMPORT / EXPORT
