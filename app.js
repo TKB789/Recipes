@@ -69,7 +69,9 @@ const state = {
   pantry: [],
   shopping: [],
   searchTerm: '',
-  groupBy: 'cuisine'
+  groupBy: 'cuisine',
+  filterCuisine: '',
+  filterMain: ''
 };
 
 const uid = () => Date.now().toString(36) + Math.random().toString(36).slice(2, 8);
@@ -535,21 +537,79 @@ function renderRotation() {
   drawWheel();
 }
 
+function refreshFilterDropdowns() {
+  const cuisines = uniqueRecipeValues('cuisine', DEFAULT_CUISINES);
+  const mains = uniqueRecipeValues('mainIngredient', DEFAULT_MAIN_INGREDIENTS);
+  const cuisineSel = document.getElementById('filterCuisine');
+  const mainSel = document.getElementById('filterMain');
+
+  // Only show options that actually have at least one matching recipe,
+  // so we don't list cuisines the user has never used.
+  const usedCuisines = new Set(state.recipes.map(r => (r.cuisine||'').trim()).filter(Boolean));
+  const usedMains = new Set(state.recipes.map(r => (r.mainIngredient||'').trim()).filter(Boolean));
+
+  const cuisineOpts = cuisines.filter(c => usedCuisines.has(c));
+  const mainOpts = mains.filter(m => usedMains.has(m));
+  // Include "Other" if any recipes have it
+  if ([...usedCuisines].some(c => c.toLowerCase() === 'other')) cuisineOpts.push('Other');
+  if ([...usedMains].some(m => m.toLowerCase() === 'other')) mainOpts.push('Other');
+
+  cuisineSel.innerHTML = '<option value="">All cuisines</option>' +
+    cuisineOpts.map(c => `<option value="${escapeAttr(c)}" ${c === state.filterCuisine ? 'selected' : ''}>${escapeHtml(c)}</option>`).join('');
+  mainSel.innerHTML = '<option value="">All ingredients</option>' +
+    mainOpts.map(m => `<option value="${escapeAttr(m)}" ${m === state.filterMain ? 'selected' : ''}>${escapeHtml(m)}</option>`).join('');
+
+  // Visual highlight for active filters
+  cuisineSel.classList.toggle('active', !!state.filterCuisine);
+  mainSel.classList.toggle('active', !!state.filterMain);
+
+  // Show/hide the Clear filters link
+  const hasFilters = state.searchTerm || state.filterCuisine || state.filterMain;
+  document.getElementById('filterClearBtn').style.display = hasFilters ? 'block' : 'none';
+}
+
 function renderLibrary() {
+  refreshFilterDropdowns();
+
   const container = document.getElementById('libraryContainer');
   const empty = document.getElementById('libraryEmpty');
   let recipes = state.recipes.slice();
+
+  // Apply cuisine filter
+  if (state.filterCuisine) {
+    recipes = recipes.filter(r => (r.cuisine||'').trim() === state.filterCuisine);
+  }
+  // Apply main ingredient filter
+  if (state.filterMain) {
+    recipes = recipes.filter(r => (r.mainIngredient||'').trim() === state.filterMain);
+  }
+  // Apply text search (over title, cuisine, main, and ingredients)
   if (state.searchTerm) {
     const q = state.searchTerm.toLowerCase();
     recipes = recipes.filter(r =>
       r.title.toLowerCase().includes(q) ||
       (r.cuisine||'').toLowerCase().includes(q) ||
-      (r.mainIngredient||'').toLowerCase().includes(q)
+      (r.mainIngredient||'').toLowerCase().includes(q) ||
+      (r.ingredients||[]).some(i => i.toLowerCase().includes(q))
     );
   }
+
   if (!recipes.length) {
     container.innerHTML = '';
     empty.style.display = 'block';
+    // Customize empty message when filters are the cause
+    const hasFilters = state.searchTerm || state.filterCuisine || state.filterMain;
+    if (hasFilters && state.recipes.length > 0) {
+      empty.innerHTML = `
+        <p>No recipes match these filters.</p>
+        <p class="muted">Try clearing them or searching for something else.</p>
+      `;
+    } else {
+      empty.innerHTML = `
+        <p>No recipes saved yet.</p>
+        <p class="muted">Paste a URL above to get started.</p>
+      `;
+    }
     return;
   }
   empty.style.display = 'none';
@@ -588,6 +648,21 @@ document.getElementById('searchInput').addEventListener('input', e => {
 });
 document.getElementById('groupBy').addEventListener('change', e => {
   state.groupBy = e.target.value;
+  renderLibrary();
+});
+document.getElementById('filterCuisine').addEventListener('change', e => {
+  state.filterCuisine = e.target.value;
+  renderLibrary();
+});
+document.getElementById('filterMain').addEventListener('change', e => {
+  state.filterMain = e.target.value;
+  renderLibrary();
+});
+document.getElementById('filterClearBtn').addEventListener('click', () => {
+  state.searchTerm = '';
+  state.filterCuisine = '';
+  state.filterMain = '';
+  document.getElementById('searchInput').value = '';
   renderLibrary();
 });
 

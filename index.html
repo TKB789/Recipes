@@ -5,7 +5,7 @@
 <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
 <meta name="theme-color" content="#f5efe6">
 <title>SpicyCitrus — Your Recipe Kitchen</title>
-<link rel="stylesheet" href="styles.css?v=9">
+<link rel="stylesheet" href="styles.css?v=10">
 <link href="https://fonts.googleapis.com/css2?family=Fraunces:opsz,wght@9..144,400;9..144,500;9..144,600;9..144,700;9..144,900&family=Inter:wght@400;500;600;700&display=swap" rel="stylesheet">
 </head>
 <body>
@@ -83,12 +83,21 @@
 
     <div class="filter-bar">
       <input type="search" id="searchInput" placeholder="Search recipes…">
-      <select id="groupBy">
-        <option value="cuisine">Group by Cuisine</option>
-        <option value="main">Group by Main Ingredient</option>
-        <option value="made">Group by Made / Not Made</option>
-        <option value="none">No Grouping</option>
-      </select>
+      <div class="filter-row" id="filterRow">
+        <select id="filterCuisine" class="filter-select" aria-label="Filter by cuisine">
+          <option value="">All cuisines</option>
+        </select>
+        <select id="filterMain" class="filter-select" aria-label="Filter by main ingredient">
+          <option value="">All ingredients</option>
+        </select>
+        <select id="groupBy" aria-label="Group by">
+          <option value="cuisine">Group: Cuisine</option>
+          <option value="main">Group: Main</option>
+          <option value="made">Group: Made</option>
+          <option value="none">No Grouping</option>
+        </select>
+      </div>
+      <button class="link-btn filter-clear" id="filterClearBtn" style="display:none">Clear filters</button>
     </div>
 
     <div id="libraryContainer"></div>
@@ -174,6 +183,6 @@
 <!-- TOAST -->
 <div class="toast" id="toast"></div>
 
-<script src="app.js?v=9"></script>
+<script src="app.js?v=10"></script>
 </body>
 </html>
