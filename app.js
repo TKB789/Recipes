@@ -1311,6 +1311,7 @@ function renderPantry() {
       <span class="item-name">${escapeHtml(item.name)}</span>
       ${expiryBadgeHtml(item)}
       <div class="item-actions">
+        <button class="mini-btn" data-action="edit">✎ Edit</button>
         ${item.expiresAt ? '<button class="mini-btn" data-action="extend">+ Days</button>' : '<button class="mini-btn" data-action="addExpiry">Expiry</button>'}
         <button class="mini-btn" data-action="shop">+ Shop</button>
         <button class="mini-btn danger" data-action="delete">×</button>
@@ -1326,7 +1327,31 @@ function renderPantry() {
     li.querySelectorAll('button').forEach(btn => {
       btn.addEventListener('click', async () => {
         const action = btn.dataset.action;
-        if (action === 'shop') {
+        if (action === 'edit') {
+          const result = await pickKitchenLocation({
+            title: 'Edit item',
+            defaultName: item.name,
+            defaultLocation: item.location,
+            showName: true
+          });
+          if (!result) return;
+          const oldName = item.name;
+          item.name = result.name;
+          item.location = result.location;
+          // If the name changed substantively, refresh perishable detection
+          // (so renaming "1lb chicken" → "chicken" still gives expiry).
+          if (oldName !== result.name && !item.expiresAt) {
+            const detect = detectPerishable(item.name);
+            if (detect && detect.perishable) {
+              item.expiresAt = Date.now() + detect.days * 24 * 60 * 60 * 1000;
+              item.perishableKind = detect.kind;
+            }
+          }
+          await dbPut('pantry', item);
+          renderPantry();
+          renderShopping();
+          toast('Updated');
+        } else if (action === 'shop') {
           const shop = { id: uid(), name: item.name, checked: false, createdAt: Date.now() };
           await dbPut('shopping', shop);
           state.shopping.push(shop);
@@ -1394,6 +1419,7 @@ function renderShopping() {
       <span class="item-name">${escapeHtml(item.name)}</span>
       ${inKitchen ? '<span class="in-kitchen-badge">✓ In Kitchen</span>' : ''}
       <div class="item-actions">
+        <button class="mini-btn" data-action="edit">✎</button>
         <button class="mini-btn terra" data-action="kitchen">→ Kitchen</button>
         <button class="mini-btn danger" data-action="delete">×</button>
       </div>
@@ -1409,6 +1435,12 @@ function renderShopping() {
         const action = btn.dataset.action;
         if (action === 'kitchen') {
           await moveShoppingItemToKitchen(item);
+        } else if (action === 'edit') {
+          const newName = prompt('Edit item:', item.name);
+          if (!newName || newName.trim() === '') return;
+          item.name = newName.trim();
+          await dbPut('shopping', item);
+          renderShopping();
         } else if (action === 'delete') {
           await dbDelete('shopping', item.id);
           state.shopping = state.shopping.filter(x => x.id !== item.id);
@@ -1421,17 +1453,23 @@ function renderShopping() {
 }
 
 async function moveShoppingItemToKitchen(item) {
-  // Quick-pick action sheet — taps a button, no typing required.
-  const loc = await pickKitchenLocation();
-  if (!loc) return;
+  // Open the picker with the shopping item's name pre-filled and editable,
+  // so user can simplify "1¼ lb salmon cut into pieces" → "salmon".
+  const result = await pickKitchenLocation({
+    title: 'Move to kitchen',
+    defaultName: item.name,
+    showName: true
+  });
+  if (!result) return;
+  const { name, location } = result;
   const pantryItem = {
     id: uid(),
-    name: item.name,
-    location: loc,
+    name,
+    location,
     used: false,
     createdAt: Date.now()
   };
-  const detect = detectPerishable(item.name);
+  const detect = detectPerishable(name);
   if (detect && detect.perishable) {
     pantryItem.expiresAt = Date.now() + detect.days * 24 * 60 * 60 * 1000;
     pantryItem.perishableKind = detect.kind;
@@ -1443,29 +1481,36 @@ async function moveShoppingItemToKitchen(item) {
   state.shopping = state.shopping.filter(x => x.id !== item.id);
   renderShopping();
   renderPantry();
-  toast(`Moved to ${loc}`);
+  toast(`Moved to ${location}`);
 }
 
-// Bottom-sheet picker for kitchen location. Resolves to 'fridge' | 'pantry'
-// | 'freezer' | null (if cancelled).
-function pickKitchenLocation(title = 'Where does it go?') {
+// Bottom-sheet picker for kitchen location with editable item name.
+// Resolves to {name, location} | null (if cancelled).
+function pickKitchenLocation(opts = {}) {
+  const { title = 'Where does it go?', defaultName = '', showName = false, defaultLocation = '' } = opts;
   return new Promise(resolve => {
     const sheet = document.createElement('div');
     sheet.className = 'modal location-picker open';
+    const nameField = showName ? `
+      <label class="picker-name-label">Item name</label>
+      <input type="text" class="picker-name-input" value="${escapeAttr(defaultName)}" placeholder="e.g. salmon" autofocus>
+      <p class="picker-hint">Tip: simplify long ingredient names so they're easier to find later (e.g. "salmon" instead of "1¼ lb salmon cut into pieces").</p>
+    ` : '';
     sheet.innerHTML = `
       <div class="modal-card location-card">
         <div class="modal-scroll">
           <h2 class="picker-title">${escapeHtml(title)}</h2>
+          ${nameField}
           <div class="picker-options">
-            <button class="picker-btn" data-loc="fridge">
+            <button class="picker-btn ${defaultLocation === 'fridge' ? 'preselected' : ''}" data-loc="fridge">
               <span class="picker-icon">🧊</span>
               <span class="picker-label">Fridge</span>
             </button>
-            <button class="picker-btn" data-loc="pantry">
+            <button class="picker-btn ${defaultLocation === 'pantry' ? 'preselected' : ''}" data-loc="pantry">
               <span class="picker-icon">🥫</span>
               <span class="picker-label">Pantry</span>
             </button>
-            <button class="picker-btn" data-loc="freezer">
+            <button class="picker-btn ${defaultLocation === 'freezer' ? 'preselected' : ''}" data-loc="freezer">
               <span class="picker-icon">❄️</span>
               <span class="picker-label">Freezer</span>
             </button>
@@ -1482,13 +1527,27 @@ function pickKitchenLocation(title = 'Where does it go?') {
       resolve(val);
     };
 
+    const nameInput = sheet.querySelector('.picker-name-input');
     sheet.querySelectorAll('.picker-btn').forEach(btn => {
-      btn.addEventListener('click', () => cleanup(btn.dataset.loc));
+      btn.addEventListener('click', () => {
+        const finalName = nameInput ? nameInput.value.trim() : defaultName;
+        if (showName && !finalName) {
+          nameInput.focus();
+          return;
+        }
+        cleanup({ name: finalName, location: btn.dataset.loc });
+      });
     });
     sheet.querySelector('.picker-cancel').addEventListener('click', () => cleanup(null));
     sheet.addEventListener('click', e => {
       if (e.target === sheet) cleanup(null);
     });
+    if (nameInput) {
+      // Focus the input slightly after open so iOS doesn't fight us.
+      setTimeout(() => nameInput.focus(), 100);
+      // Pre-select all text so user can immediately retype if desired.
+      nameInput.addEventListener('focus', () => nameInput.select(), { once: true });
+    }
   });
 }
 
