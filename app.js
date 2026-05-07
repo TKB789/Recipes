@@ -554,9 +554,9 @@ function refreshFilterDropdowns() {
   if ([...usedCuisines].some(c => c.toLowerCase() === 'other')) cuisineOpts.push('Other');
   if ([...usedMains].some(m => m.toLowerCase() === 'other')) mainOpts.push('Other');
 
-  cuisineSel.innerHTML = '<option value="">All cuisines</option>' +
+  cuisineSel.innerHTML = '<option value="">Cuisine</option>' +
     cuisineOpts.map(c => `<option value="${escapeAttr(c)}" ${c === state.filterCuisine ? 'selected' : ''}>${escapeHtml(c)}</option>`).join('');
-  mainSel.innerHTML = '<option value="">All ingredients</option>' +
+  mainSel.innerHTML = '<option value="">Main</option>' +
     mainOpts.map(m => `<option value="${escapeAttr(m)}" ${m === state.filterMain ? 'selected' : ''}>${escapeHtml(m)}</option>`).join('');
 
   // Visual highlight for active filters
@@ -1006,21 +1006,6 @@ function drawWheel() {
     ctx.strokeStyle = '#fbf7f0';
     ctx.lineWidth = 3;
     ctx.stroke();
-
-    // Label
-    ctx.save();
-    ctx.rotate(start + slice/2);
-    ctx.fillStyle = '#fbf7f0';
-    ctx.font = '700 15px Inter, sans-serif';
-    ctx.textAlign = 'right';
-    ctx.textBaseline = 'middle';
-    // Text shadow for legibility
-    ctx.shadowColor = 'rgba(0,0,0,0.6)';
-    ctx.shadowBlur = 4;
-    const maxChars = inRot.length > 8 ? 14 : 22;
-    const txt = r.title.length > maxChars ? r.title.slice(0, maxChars - 1) + '…' : r.title;
-    ctx.fillText(txt, R - 16, 0);
-    ctx.restore();
   });
   ctx.restore();
 
