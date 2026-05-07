@@ -1007,6 +1007,24 @@ function drawWheel() {
     ctx.strokeStyle = '#fbf7f0';
     ctx.lineWidth = 3;
     ctx.stroke();
+
+    // Short label so you can verify the wheel and the picker agree.
+    // Only the first word or two, with strong text shadow.
+    ctx.save();
+    ctx.rotate(start + slice/2);
+    ctx.fillStyle = '#fbf7f0';
+    ctx.font = '700 13px Inter, sans-serif';
+    ctx.textAlign = 'right';
+    ctx.textBaseline = 'middle';
+    ctx.shadowColor = 'rgba(0,0,0,0.85)';
+    ctx.shadowBlur = 5;
+    // Just enough text to identify the slice — long titles get truncated short
+    const maxLen = inRot.length > 6 ? 10 : 14;
+    const txt = (r.title || '').length > maxLen
+      ? (r.title.slice(0, maxLen - 1) + '…')
+      : (r.title || '');
+    ctx.fillText(txt, R - 14, 0);
+    ctx.restore();
   });
   ctx.restore();
 
@@ -1041,9 +1059,6 @@ document.getElementById('spinBtn').addEventListener('click', () => {
   lastWinnerId = null;
 
   const targetIdx = Math.floor(Math.random() * inRot.length);
-  // Snapshot the winning recipe's ID immediately, so even if the rotation
-  // list changes during the spin, we open the right recipe.
-  const winnerId = inRot[targetIdx].id;
   const slice = (Math.PI*2) / inRot.length;
   // Pointer at top = -PI/2. We want target slice center at -PI/2.
   const targetCenter = targetIdx * slice + slice/2;
@@ -1064,11 +1079,13 @@ document.getElementById('spinBtn').addEventListener('click', () => {
       // Normalize once at the end
       wheelAngle = wheelAngle % (Math.PI*2);
       spinning = false;
-      // Look up the winner by ID, not by index — guards against any
-      // reordering of the rotation list during the spin.
-      const winner = state.recipes.find(r => r.id === winnerId);
+      // Determine the winner from the ACTUAL rotation of the wheel,
+      // not the originally-intended target index. This guarantees the
+      // displayed pointer position and the picked recipe always agree,
+      // even if floating-point drift or any other oddity happened.
+      const winner = sliceAtPointer();
       if (!winner) {
-        toast('Winner no longer in rotation');
+        toast('Could not determine winner');
         return;
       }
       lastWinnerId = winner.id;
@@ -1077,6 +1094,25 @@ document.getElementById('spinBtn').addEventListener('click', () => {
   }
   requestAnimationFrame(animate);
 });
+
+// Returns the recipe whose slice is currently under the pointer (at the top
+// of the wheel). Source of truth = current wheelAngle + current rotation list.
+function sliceAtPointer() {
+  const inRot = state.recipes.filter(r => r.inRotation);
+  if (!inRot.length) return null;
+  const slice = (Math.PI*2) / inRot.length;
+  const TOP = 3 * Math.PI / 2; // canvas angle for "12 o'clock"
+  let bestIdx = 0;
+  let bestErr = Infinity;
+  for (let i = 0; i < inRot.length; i++) {
+    const sliceCenter = wheelAngle + i * slice + slice/2;
+    let norm = ((sliceCenter % (Math.PI*2)) + Math.PI*2) % (Math.PI*2);
+    let err = Math.abs(norm - TOP);
+    if (err > Math.PI) err = Math.PI*2 - err;
+    if (err < bestErr) { bestErr = err; bestIdx = i; }
+  }
+  return inRot[bestIdx];
+}
 
 function showWinner(winner) {
   // Build the tappable result card (still useful for re-opening after closing)
