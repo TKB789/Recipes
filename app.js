@@ -1064,7 +1064,7 @@ document.getElementById('spinBtn').addEventListener('click', () => {
 });
 
 function showWinner(winner) {
-  // Build the tappable result card
+  // Build the tappable result card (still useful for re-opening after closing)
   const resultEl = document.getElementById('wheelResult');
   const thumbStyle = winner.image
     ? `style="background-image:url('${escapeAttr(winner.image)}')"`
@@ -1089,6 +1089,12 @@ function showWinner(winner) {
   if (card) {
     card.classList.add('winner');
   }
+
+  // Auto-open the winning recipe card after a short pause so the user has
+  // a moment to register the result before being taken into it.
+  setTimeout(() => {
+    openRecipe(winner.id);
+  }, 700);
 }
 
 /* =====================================================
