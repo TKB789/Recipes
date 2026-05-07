@@ -572,17 +572,16 @@ main { padding: 20px 18px; max-width: 900px; margin: 0 auto; }
 
 /* ===== MODAL ===== */
 .modal {
-  position: fixed; inset: 0;
+  position: fixed;
+  top: 0; left: 0; right: 0; bottom: 0;
   background: rgba(28,24,20,.5);
   backdrop-filter: blur(4px);
+  -webkit-backdrop-filter: blur(4px);
   display: none;
   align-items: flex-end;
   justify-content: center;
   z-index: 100;
   animation: fadeIn .2s ease;
-  /* Dynamic viewport height respects iOS Safari's toolbar */
-  height: 100vh;
-  height: 100dvh;
 }
 .modal.open { display: flex; }
 .modal-card {
@@ -591,10 +590,7 @@ main { padding: 20px 18px; max-width: 900px; margin: 0 auto; }
   border-top-right-radius: 24px;
   width: 100%;
   max-width: 600px;
-  /* Use dvh (dynamic viewport height) so iOS Safari's collapsing toolbar
-     is accounted for. Fall back to vh for older browsers. */
-  max-height: 92vh;
-  max-height: 92dvh;
+  max-height: 90vh;
   padding: 0;
   position: relative;
   animation: slideUp .3s cubic-bezier(.2,.9,.3,1);
@@ -605,11 +601,8 @@ main { padding: 20px 18px; max-width: 900px; margin: 0 auto; }
 .modal-scroll {
   overflow-y: auto;
   -webkit-overflow-scrolling: touch;
-  padding: 20px 20px 40px;
+  padding: 20px 20px 80px;
   flex: 1;
-  /* leave room at the very top so the first content doesn't collide
-     with the floating close button */
-  padding-top: 20px;
 }
 @media (min-width: 700px) {
   .modal { align-items: center; }
@@ -617,26 +610,26 @@ main { padding: 20px 18px; max-width: 900px; margin: 0 auto; }
 }
 @keyframes slideUp { from { transform: translateY(40px); } to { transform: translateY(0); } }
 .modal-close {
-  position: fixed;
-  /* Account for iOS notch/dynamic island */
-  top: max(12px, env(safe-area-inset-top));
-  right: max(12px, env(safe-area-inset-right));
+  position: absolute;
+  top: 12px;
+  right: 12px;
   background: rgba(251, 247, 240, 0.95);
-  backdrop-filter: blur(8px);
   -webkit-backdrop-filter: blur(8px);
+  backdrop-filter: blur(8px);
   border: 1px solid var(--line);
   border-radius: 999px;
   width: 44px; height: 44px;
   font-size: 24px;
   line-height: 1;
   cursor: pointer;
-  z-index: 110; /* above modal content */
+  z-index: 10;
   box-shadow: 0 2px 12px rgba(28, 24, 20, 0.2);
   display: flex;
   align-items: center;
   justify-content: center;
   color: var(--ink);
   font-weight: 400;
+  padding: 0;
 }
 .modal-close:active {
   transform: scale(0.92);
