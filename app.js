@@ -1083,16 +1083,11 @@ function showWinner(winner) {
     openRecipe(winner.id);
   });
 
-  // Highlight the winner card in the rotation grid and scroll to it
+  // Highlight the winner card in the rotation grid (no auto-scroll —
+  // user can tap the result banner to open the recipe directly).
   const card = document.querySelector(`#rotationGrid .recipe-card[data-id="${winner.id}"]`);
   if (card) {
     card.classList.add('winner');
-    // Smooth-scroll the card into view, leaving a little headroom for the sticky tabs.
-    setTimeout(() => {
-      const rect = card.getBoundingClientRect();
-      const top = window.scrollY + rect.top - 140;
-      window.scrollTo({ top, behavior: 'smooth' });
-    }, 250);
   }
 }
 
@@ -1283,6 +1278,29 @@ function escapeHtml(s) {
   return String(s).replace(/[&<>"']/g, c => ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));
 }
 function escapeAttr(s) { return escapeHtml(s); }
+
+/* =====================================================
+   BACK TO TOP
+   ===================================================== */
+const backToTopBtn = document.getElementById('backToTopBtn');
+let scrollTickPending = false;
+function updateBackToTop() {
+  scrollTickPending = false;
+  if (window.scrollY > 400) {
+    backToTopBtn.classList.add('show');
+  } else {
+    backToTopBtn.classList.remove('show');
+  }
+}
+window.addEventListener('scroll', () => {
+  if (!scrollTickPending) {
+    scrollTickPending = true;
+    requestAnimationFrame(updateBackToTop);
+  }
+}, { passive: true });
+backToTopBtn.addEventListener('click', () => {
+  window.scrollTo({ top: 0, behavior: 'smooth' });
+});
 
 /* =====================================================
    INIT

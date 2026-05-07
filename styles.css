@@ -621,6 +621,8 @@ main { padding: 20px 18px; max-width: 900px; margin: 0 auto; }
   justify-content: center;
   z-index: 100;
   animation: fadeIn .2s ease;
+  height: 100vh;
+  height: 100dvh;
 }
 .modal.open { display: flex; }
 .modal-card {
@@ -630,6 +632,9 @@ main { padding: 20px 18px; max-width: 900px; margin: 0 auto; }
   width: 100%;
   max-width: 600px;
   max-height: 90vh;
+  /* dvh accounts for iOS Safari's collapsing toolbar so the modal
+     doesn't get clipped when the URL bar expands. */
+  max-height: 90dvh;
   padding: 0;
   position: relative;
   animation: slideUp .3s cubic-bezier(.2,.9,.3,1);
@@ -890,3 +895,38 @@ main { padding: 20px 18px; max-width: 900px; margin: 0 auto; }
   box-shadow: 0 10px 30px rgba(0,0,0,.2);
 }
 .toast.show { opacity: 1; transform: translateX(-50%) translateY(0); }
+
+/* ===== BACK TO TOP ===== */
+.back-to-top {
+  position: fixed;
+  bottom: 24px;
+  right: 18px;
+  width: 48px;
+  height: 48px;
+  border-radius: 50%;
+  background: var(--terracotta);
+  color: var(--paper);
+  border: none;
+  font-size: 22px;
+  font-weight: 600;
+  line-height: 1;
+  cursor: pointer;
+  z-index: 90;
+  box-shadow: 0 6px 20px rgba(197, 87, 59, 0.4);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  opacity: 0;
+  transform: translateY(80px);
+  transition: opacity .25s, transform .25s;
+  pointer-events: none;
+  padding: 0;
+}
+.back-to-top.show {
+  opacity: 1;
+  transform: translateY(0);
+  pointer-events: auto;
+}
+.back-to-top:active {
+  transform: scale(0.92);
+}
