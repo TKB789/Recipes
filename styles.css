@@ -407,13 +407,16 @@ main { padding: 20px 18px; max-width: 900px; margin: 0 auto; }
 }
 .wheel-pointer {
   position: absolute;
-  top: -8px;
+  top: 0px;
   left: 50%;
+  width: 22px;
+  height: 22px;
   transform: translateX(-50%);
-  font-size: 32px;
-  color: var(--terracotta);
+  /* SVG triangle pointing down, tip at the bottom-center */
+  background: url("data:image/svg+xml;utf8,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 22 22'><polygon points='11,22 0,0 22,0' fill='%23c5573b'/></svg>") no-repeat center / contain;
   filter: drop-shadow(0 2px 4px rgba(0,0,0,.2));
   pointer-events: none;
+  z-index: 2;
 }
 .spin-btn { margin-top: 16px; padding: 14px 32px; font-size: 16px; }
 .wheel-result {

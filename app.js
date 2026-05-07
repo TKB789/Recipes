@@ -866,6 +866,7 @@ const COLORS = ['#c5573b','#d99a3d','#6b7148','#9d3f29','#a8763a','#3d6661','#b5
 let wheelAngle = 0;
 let spinning = false;
 let lastWinnerId = null;
+let pendingAutoOpenTimer = null;
 
 // Image cache for the wheel
 const imageCache = new Map(); // url -> {img, loaded, failed}
@@ -1028,6 +1029,11 @@ document.getElementById('spinBtn').addEventListener('click', () => {
   if (spinning) return;
   const inRot = state.recipes.filter(r => r.inRotation);
   if (!inRot.length) { toast('Add recipes to rotation first'); return; }
+  // Cancel any pending auto-open from a previous spin
+  if (pendingAutoOpenTimer) {
+    clearTimeout(pendingAutoOpenTimer);
+    pendingAutoOpenTimer = null;
+  }
   spinning = true;
   // Clear previous winner state
   document.getElementById('wheelResult').innerHTML = '';
@@ -1035,6 +1041,9 @@ document.getElementById('spinBtn').addEventListener('click', () => {
   lastWinnerId = null;
 
   const targetIdx = Math.floor(Math.random() * inRot.length);
+  // Snapshot the winning recipe's ID immediately, so even if the rotation
+  // list changes during the spin, we open the right recipe.
+  const winnerId = inRot[targetIdx].id;
   const slice = (Math.PI*2) / inRot.length;
   // Pointer at top = -PI/2. We want target slice center at -PI/2.
   const targetCenter = targetIdx * slice + slice/2;
@@ -1055,7 +1064,13 @@ document.getElementById('spinBtn').addEventListener('click', () => {
       // Normalize once at the end
       wheelAngle = wheelAngle % (Math.PI*2);
       spinning = false;
-      const winner = inRot[targetIdx];
+      // Look up the winner by ID, not by index — guards against any
+      // reordering of the rotation list during the spin.
+      const winner = state.recipes.find(r => r.id === winnerId);
+      if (!winner) {
+        toast('Winner no longer in rotation');
+        return;
+      }
       lastWinnerId = winner.id;
       showWinner(winner);
     }
@@ -1091,8 +1106,11 @@ function showWinner(winner) {
   }
 
   // Auto-open the winning recipe card after a short pause so the user has
-  // a moment to register the result before being taken into it.
-  setTimeout(() => {
+  // a moment to register the result before being taken into it. Track the
+  // timer so a subsequent spin can cancel a pending open.
+  if (pendingAutoOpenTimer) clearTimeout(pendingAutoOpenTimer);
+  pendingAutoOpenTimer = setTimeout(() => {
+    pendingAutoOpenTimer = null;
     openRecipe(winner.id);
   }, 700);
 }
