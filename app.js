@@ -1,9 +1,9 @@
 /* =====================================================
-   Saffron Recipe App
+   SpicyCitrus Recipe App
    ===================================================== */
 
 // ----- IndexedDB Wrapper -----
-const DB_NAME = 'saffron_db';
+const DB_NAME = 'spicycitrus_db';
 const DB_VERSION = 1;
 let db;
 
@@ -399,6 +399,10 @@ function renderRotation() {
     grid.innerHTML = inRot.map(recipeCardHtml).join('');
     grid.querySelectorAll('.recipe-card').forEach(c => {
       c.addEventListener('click', () => openRecipe(c.dataset.id));
+      // Re-apply winner highlight if this card was the last winner
+      if (lastWinnerId && c.dataset.id === lastWinnerId) {
+        c.classList.add('winner');
+      }
     });
   }
   drawWheel();
@@ -560,6 +564,44 @@ function openRecipe(id) {
 const COLORS = ['#c5573b','#d99a3d','#6b7148','#9d3f29','#a8763a','#3d6661','#b54a3c','#8b6f3f'];
 let wheelAngle = 0;
 let spinning = false;
+let lastWinnerId = null;
+
+// Image cache for the wheel
+const imageCache = new Map(); // url -> {img, loaded, failed}
+
+function loadWheelImage(url) {
+  if (!url) return null;
+  if (imageCache.has(url)) return imageCache.get(url);
+  const entry = { img: new Image(), loaded: false, failed: false };
+  // crossOrigin='anonymous' lets us draw to canvas without tainting it,
+  // but only works if the host sends CORS headers. If it fails, retry without.
+  entry.img.crossOrigin = 'anonymous';
+  let triedFallback = false;
+  entry.img.onload = () => {
+    entry.loaded = true;
+    drawWheel(); // redraw when image arrives
+  };
+  entry.img.onerror = () => {
+    if (!triedFallback) {
+      triedFallback = true;
+      // Retry without crossOrigin — image may still display but canvas may be tainted.
+      // We catch tainted-canvas errors at draw time.
+      const retry = new Image();
+      retry.onload = () => {
+        entry.img = retry;
+        entry.loaded = true;
+        drawWheel();
+      };
+      retry.onerror = () => { entry.failed = true; };
+      retry.src = url;
+    } else {
+      entry.failed = true;
+    }
+  };
+  entry.img.src = url;
+  imageCache.set(url, entry);
+  return entry;
+}
 
 function drawWheel() {
   const canvas = document.getElementById('wheel');
@@ -591,12 +633,75 @@ function drawWheel() {
 
   inRot.forEach((r, i) => {
     const start = i * slice;
+
+    // Build the slice path
+    ctx.save();
     ctx.beginPath();
     ctx.moveTo(0,0);
     ctx.arc(0, 0, R, start, start + slice);
     ctx.closePath();
-    ctx.fillStyle = COLORS[i % COLORS.length];
-    ctx.fill();
+
+    // Try to fill with image
+    let drewImage = false;
+    if (r.image) {
+      const entry = loadWheelImage(r.image);
+      if (entry && entry.loaded && !entry.failed) {
+        try {
+          ctx.clip(); // clip to slice shape
+          // Draw image rotated so it sits "upright" within the slice.
+          // The slice spans angles [start, start+slice]; its mid is start + slice/2.
+          // Rotate canvas so the slice's mid points "outward to the right",
+          // then draw the image in a square that covers the slice region.
+          const mid = start + slice/2;
+          ctx.rotate(mid);
+          // Cover area: from origin out to R along x-axis, with height ~ R*tan(slice/2)*2.
+          // Simplest: draw a square sized 2R by 2R centered around (R/2, 0)... use cover math.
+          const aspect = entry.img.width / entry.img.height || 1;
+          // Target: fill the slice region. We'll draw to fit a box from x=0..R, y=-R..R, then cover.
+          const boxW = R;
+          const boxH = R; // half-height per side; total 2R wedge but image only needs to cover wedge
+          // Use cover scaling
+          let sw = entry.img.width, sh = entry.img.height;
+          let dx = 0, dy = -boxH, dw = boxW, dh = boxH * 2;
+          // Cover crop:
+          const targetAspect = dw / dh;
+          let srcX = 0, srcY = 0, srcW = sw, srcH = sh;
+          if (aspect > targetAspect) {
+            // image wider than target, crop sides
+            srcW = sh * targetAspect;
+            srcX = (sw - srcW) / 2;
+          } else {
+            srcH = sw / targetAspect;
+            srcY = (sh - srcH) / 2;
+          }
+          ctx.drawImage(entry.img, srcX, srcY, srcW, srcH, dx, dy, dw, dh);
+          // Darken overlay for text legibility
+          ctx.fillStyle = 'rgba(28,24,20,0.35)';
+          ctx.fillRect(dx, dy, dw, dh);
+          drewImage = true;
+        } catch (e) {
+          // If clip/draw fails, fall through to color
+          drewImage = false;
+        }
+      }
+    }
+    ctx.restore();
+
+    // If no image drew, fill with color
+    if (!drewImage) {
+      ctx.beginPath();
+      ctx.moveTo(0,0);
+      ctx.arc(0, 0, R, start, start + slice);
+      ctx.closePath();
+      ctx.fillStyle = COLORS[i % COLORS.length];
+      ctx.fill();
+    }
+
+    // Slice border
+    ctx.beginPath();
+    ctx.moveTo(0,0);
+    ctx.arc(0, 0, R, start, start + slice);
+    ctx.closePath();
     ctx.strokeStyle = '#fbf7f0';
     ctx.lineWidth = 3;
     ctx.stroke();
@@ -605,10 +710,14 @@ function drawWheel() {
     ctx.save();
     ctx.rotate(start + slice/2);
     ctx.fillStyle = '#fbf7f0';
-    ctx.font = '600 16px Inter, sans-serif';
+    ctx.font = '700 15px Inter, sans-serif';
     ctx.textAlign = 'right';
     ctx.textBaseline = 'middle';
-    const txt = r.title.length > 22 ? r.title.slice(0,20) + '…' : r.title;
+    // Text shadow for legibility
+    ctx.shadowColor = 'rgba(0,0,0,0.6)';
+    ctx.shadowBlur = 4;
+    const maxChars = inRot.length > 8 ? 14 : 22;
+    const txt = r.title.length > maxChars ? r.title.slice(0, maxChars - 1) + '…' : r.title;
     ctx.fillText(txt, R - 16, 0);
     ctx.restore();
   });
@@ -616,14 +725,14 @@ function drawWheel() {
 
   // Center hub
   ctx.beginPath();
-  ctx.arc(cx, cy, 28, 0, Math.PI*2);
+  ctx.arc(cx, cy, 30, 0, Math.PI*2);
   ctx.fillStyle = '#fbf7f0';
   ctx.fill();
   ctx.strokeStyle = '#1c1814';
   ctx.lineWidth = 2;
   ctx.stroke();
   ctx.fillStyle = '#c5573b';
-  ctx.font = '20px serif';
+  ctx.font = '22px serif';
   ctx.textAlign = 'center';
   ctx.textBaseline = 'middle';
   ctx.fillText('✺', cx, cy);
@@ -634,7 +743,11 @@ document.getElementById('spinBtn').addEventListener('click', () => {
   const inRot = state.recipes.filter(r => r.inRotation);
   if (!inRot.length) { toast('Add recipes to rotation first'); return; }
   spinning = true;
-  document.getElementById('wheelResult').textContent = '';
+  // Clear previous winner state
+  document.getElementById('wheelResult').innerHTML = '';
+  document.querySelectorAll('.recipe-card.winner').forEach(c => c.classList.remove('winner'));
+  lastWinnerId = null;
+
   const targetIdx = Math.floor(Math.random() * inRot.length);
   const slice = (Math.PI*2) / inRot.length;
   // Pointer at top = -PI/2. We want target slice center at -PI/2.
@@ -649,17 +762,53 @@ document.getElementById('spinBtn').addEventListener('click', () => {
     const t = Math.min((now - startTime) / duration, 1);
     const eased = 1 - Math.pow(1 - t, 3);
     wheelAngle = start + (finalAngle - start) * eased;
-    wheelAngle = wheelAngle % (Math.PI*2);
     drawWheel();
-    if (t < 1) requestAnimationFrame(animate);
-    else {
+    if (t < 1) {
+      requestAnimationFrame(animate);
+    } else {
+      // Normalize once at the end
+      wheelAngle = wheelAngle % (Math.PI*2);
       spinning = false;
       const winner = inRot[targetIdx];
-      document.getElementById('wheelResult').textContent = `Tonight: ${winner.title}`;
+      lastWinnerId = winner.id;
+      showWinner(winner);
     }
   }
   requestAnimationFrame(animate);
 });
+
+function showWinner(winner) {
+  // Build the tappable result card
+  const resultEl = document.getElementById('wheelResult');
+  const thumbStyle = winner.image
+    ? `style="background-image:url('${escapeAttr(winner.image)}')"`
+    : '';
+  resultEl.innerHTML = `
+    <button class="wheel-result-card" id="openWinnerBtn">
+      <div class="winner-thumb" ${thumbStyle}></div>
+      <div class="winner-text">
+        <span class="winner-label">Tonight you're cooking</span>
+        <span class="winner-name">${escapeHtml(winner.title)}</span>
+      </div>
+      <span class="winner-arrow">→</span>
+    </button>
+  `;
+  document.getElementById('openWinnerBtn').addEventListener('click', () => {
+    openRecipe(winner.id);
+  });
+
+  // Highlight the winner card in the rotation grid and scroll to it
+  const card = document.querySelector(`#rotationGrid .recipe-card[data-id="${winner.id}"]`);
+  if (card) {
+    card.classList.add('winner');
+    // Smooth-scroll the card into view, leaving a little headroom for the sticky tabs.
+    setTimeout(() => {
+      const rect = card.getBoundingClientRect();
+      const top = window.scrollY + rect.top - 140;
+      window.scrollTo({ top, behavior: 'smooth' });
+    }, 250);
+  }
+}
 
 /* =====================================================
    PANTRY / KITCHEN
@@ -791,7 +940,7 @@ document.getElementById('exportBtn').addEventListener('click', () => {
   const a = document.createElement('a');
   a.href = url;
   const date = new Date().toISOString().slice(0,10);
-  a.download = `saffron-backup-${date}.json`;
+  a.download = `spicycitrus-backup-${date}.json`;
   a.click();
   URL.revokeObjectURL(url);
   document.getElementById('ioNote').textContent = 'Exported ✓';

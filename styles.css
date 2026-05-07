@@ -1,4 +1,4 @@
-/* ===== Saffron — Editorial Cookbook Aesthetic ===== */
+/* ===== SpicyCitrus — Editorial Cookbook Aesthetic ===== */
 :root {
   --cream: #f5efe6;
   --cream-deep: #ece4d4;
@@ -351,6 +351,96 @@ main { padding: 20px 18px; max-width: 900px; margin: 0 auto; }
   color: var(--terracotta-deep);
   min-height: 24px;
   text-align: center;
+}
+
+/* Winner card — lifts above the others and pulses */
+.recipe-card.winner {
+  transform: translateY(-6px) scale(1.02);
+  box-shadow: 0 0 0 3px var(--terracotta), 0 18px 40px rgba(197, 87, 59, 0.35), var(--shadow);
+  animation: winnerPulse 2s ease-in-out infinite;
+  z-index: 2;
+}
+.recipe-card.winner::before {
+  content: '✦ Tonight';
+  position: absolute;
+  top: -12px;
+  left: 50%;
+  transform: translateX(-50%);
+  background: var(--terracotta);
+  color: var(--paper);
+  font-family: 'Fraunces', serif;
+  font-style: italic;
+  font-size: 13px;
+  padding: 4px 14px;
+  border-radius: 999px;
+  white-space: nowrap;
+  z-index: 3;
+  box-shadow: 0 4px 10px rgba(197, 87, 59, 0.35);
+}
+@keyframes winnerPulse {
+  0%, 100% { box-shadow: 0 0 0 3px var(--terracotta), 0 18px 40px rgba(197, 87, 59, 0.35), var(--shadow); }
+  50% { box-shadow: 0 0 0 3px var(--terracotta), 0 22px 50px rgba(197, 87, 59, 0.55), var(--shadow); }
+}
+
+/* "Open winner" button shown on the wheel result */
+.wheel-result-card {
+  margin-top: 14px;
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  padding: 10px 14px 10px 10px;
+  background: var(--terracotta);
+  color: var(--paper);
+  border: none;
+  border-radius: 999px;
+  font-family: inherit;
+  font-size: 15px;
+  font-weight: 500;
+  cursor: pointer;
+  box-shadow: 0 8px 24px rgba(197, 87, 59, 0.4);
+  animation: resultSlide .5s cubic-bezier(.2,.9,.3,1);
+  max-width: 100%;
+}
+@keyframes resultSlide {
+  from { opacity: 0; transform: translateY(10px) scale(.95); }
+  to { opacity: 1; transform: none; }
+}
+.wheel-result-card .winner-thumb {
+  width: 44px;
+  height: 44px;
+  border-radius: 50%;
+  background: var(--cream-deep);
+  background-size: cover;
+  background-position: center;
+  flex-shrink: 0;
+  border: 2px solid var(--paper);
+}
+.wheel-result-card .winner-text {
+  display: flex;
+  flex-direction: column;
+  align-items: flex-start;
+  flex: 1;
+  min-width: 0;
+}
+.wheel-result-card .winner-label {
+  font-family: 'Fraunces', serif;
+  font-style: italic;
+  font-size: 12px;
+  opacity: 0.85;
+  line-height: 1;
+}
+.wheel-result-card .winner-name {
+  font-weight: 600;
+  font-size: 15px;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  max-width: 100%;
+}
+.wheel-result-card .winner-arrow {
+  font-size: 20px;
+  flex-shrink: 0;
+  margin-left: 4px;
 }
 
 .empty-state {
