@@ -69,7 +69,7 @@ const state = {
   pantry: [],
   shopping: [],
   searchTerm: '',
-  groupBy: 'cuisine',
+  groupBy: 'time',
   filterCuisine: '',
   filterMain: ''
 };
@@ -551,6 +551,8 @@ fetchBtn.addEventListener('click', async () => {
     urlInput.value = '';
     renderLibrary();
     renderRotation();
+    // Open the new recipe so the user can review/edit it right away
+    openRecipe(newRecipe.id);
   } catch (e) {
     console.error(e);
     setStatus('Could not load that page. Try the manual form below.', 'error');
@@ -615,6 +617,8 @@ document.getElementById('saveManualBtn').addEventListener('click', async () => {
   toast('Recipe saved');
   renderLibrary();
   renderRotation();
+  // Open the new recipe so the user can review/edit it right away
+  openRecipe(recipe.id);
 });
 
 /* =====================================================
