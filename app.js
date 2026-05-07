@@ -1,5 +1,5 @@
 /* =====================================================
-   SpicyCitrus Recipe App
+   Citrus&Spice Recipe App
    ===================================================== */
 
 // ----- IndexedDB Wrapper -----
@@ -1421,14 +1421,9 @@ function renderShopping() {
 }
 
 async function moveShoppingItemToKitchen(item) {
-  // Quick prompt for location. Default to fridge as the most common case.
-  const where = prompt('Where? Type fridge, pantry, or freezer:', 'fridge');
-  if (!where) return;
-  const loc = where.trim().toLowerCase();
-  if (!['fridge','pantry','freezer'].includes(loc)) {
-    toast('Use fridge, pantry, or freezer');
-    return;
-  }
+  // Quick-pick action sheet — taps a button, no typing required.
+  const loc = await pickKitchenLocation();
+  if (!loc) return;
   const pantryItem = {
     id: uid(),
     name: item.name,
@@ -1449,6 +1444,52 @@ async function moveShoppingItemToKitchen(item) {
   renderShopping();
   renderPantry();
   toast(`Moved to ${loc}`);
+}
+
+// Bottom-sheet picker for kitchen location. Resolves to 'fridge' | 'pantry'
+// | 'freezer' | null (if cancelled).
+function pickKitchenLocation(title = 'Where does it go?') {
+  return new Promise(resolve => {
+    const sheet = document.createElement('div');
+    sheet.className = 'modal location-picker open';
+    sheet.innerHTML = `
+      <div class="modal-card location-card">
+        <div class="modal-scroll">
+          <h2 class="picker-title">${escapeHtml(title)}</h2>
+          <div class="picker-options">
+            <button class="picker-btn" data-loc="fridge">
+              <span class="picker-icon">🧊</span>
+              <span class="picker-label">Fridge</span>
+            </button>
+            <button class="picker-btn" data-loc="pantry">
+              <span class="picker-icon">🥫</span>
+              <span class="picker-label">Pantry</span>
+            </button>
+            <button class="picker-btn" data-loc="freezer">
+              <span class="picker-icon">❄️</span>
+              <span class="picker-label">Freezer</span>
+            </button>
+          </div>
+          <button class="primary-btn outline picker-cancel">Cancel</button>
+        </div>
+      </div>
+    `;
+    document.body.appendChild(sheet);
+
+    const cleanup = (val) => {
+      sheet.classList.remove('open');
+      setTimeout(() => sheet.remove(), 200);
+      resolve(val);
+    };
+
+    sheet.querySelectorAll('.picker-btn').forEach(btn => {
+      btn.addEventListener('click', () => cleanup(btn.dataset.loc));
+    });
+    sheet.querySelector('.picker-cancel').addEventListener('click', () => cleanup(null));
+    sheet.addEventListener('click', e => {
+      if (e.target === sheet) cleanup(null);
+    });
+  });
 }
 
 document.getElementById('clearCheckedBtn').addEventListener('click', async () => {
@@ -1600,7 +1641,7 @@ document.getElementById('exportBtn').addEventListener('click', () => {
   const a = document.createElement('a');
   a.href = url;
   const date = new Date().toISOString().slice(0,10);
-  a.download = `spicycitrus-backup-${date}.json`;
+  a.download = `citrus-spice-backup-${date}.json`;
   a.click();
   URL.revokeObjectURL(url);
   document.getElementById('ioNote').textContent = 'Exported ✓';
