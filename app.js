@@ -706,6 +706,38 @@ function renderRotation() {
   drawWheel();
 }
 
+// Parse a free-form time string (like "20 min", "1h 30m", "45 minutes",
+// "1.5 hours") into minutes. Returns null if no number found.
+function parseTimeMinutes(str) {
+  if (!str) return null;
+  const s = String(str).toLowerCase();
+  let total = 0;
+  let matched = false;
+  // Hours: "1h", "1 hr", "1 hour", "1.5 hours"
+  const hMatch = s.match(/(\d+(?:\.\d+)?)\s*(?:h\b|hr|hour)/);
+  if (hMatch) { total += parseFloat(hMatch[1]) * 60; matched = true; }
+  // Minutes: "30m", "30 min", "30 minutes" — but not the 'm' inside "hour"
+  const mMatch = s.match(/(\d+(?:\.\d+)?)\s*(?:m(?:in|inute)?s?\b|m\b)/);
+  if (mMatch) { total += parseFloat(mMatch[1]); matched = true; }
+  // If no unit was detected at all but there's a number, assume minutes
+  if (!matched) {
+    const nMatch = s.match(/(\d+(?:\.\d+)?)/);
+    if (nMatch) total = parseFloat(nMatch[1]);
+    else return null;
+  }
+  return total > 0 ? Math.round(total) : null;
+}
+
+function timeBucket(totalTime) {
+  const m = parseTimeMinutes(totalTime);
+  if (m === null) return 'No time listed';
+  if (m < 15) return 'Under 15 min';
+  if (m <= 30) return '15-30 min';
+  if (m <= 60) return '30-60 min';
+  if (m <= 120) return '1-2 hours';
+  return 'Over 2 hours';
+}
+
 function refreshFilterDropdowns() {
   const cuisines = uniqueRecipeValues('cuisine', DEFAULT_CUISINES);
   const mains = uniqueRecipeValues('mainIngredient', DEFAULT_MAIN_INGREDIENTS);
@@ -792,10 +824,16 @@ function renderLibrary() {
       if (state.groupBy === 'cuisine') key = r.cuisine || 'Other';
       else if (state.groupBy === 'main') key = r.mainIngredient || 'Other';
       else if (state.groupBy === 'made') key = r.made ? 'Made' : 'Not Yet Made';
+      else if (state.groupBy === 'time') key = timeBucket(r.totalTime);
       groups[key] = groups[key] || [];
       groups[key].push(r);
     }
+    // Time buckets need a fixed order, not alphabetical
+    const TIME_ORDER = ['Under 15 min','15-30 min','30-60 min','1-2 hours','Over 2 hours','No time listed'];
     const sortedKeys = Object.keys(groups).sort((a,b) => {
+      if (state.groupBy === 'time') {
+        return TIME_ORDER.indexOf(a) - TIME_ORDER.indexOf(b);
+      }
       if (a === 'Other') return 1;
       if (b === 'Other') return -1;
       return a.localeCompare(b);
