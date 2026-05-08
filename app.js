@@ -1718,13 +1718,14 @@ function renderMakeResults() {
   const resultsEl = document.getElementById('makeResults');
 
   // Build dynamic tabs based on what's actually achievable
-  const buckets = { 'have-all': 0, 'missing-1': 0, 'missing-2': 0, 'missing-3': 0, 'missing-more': 0 };
+  const buckets = { 'have-all': 0, 'missing-1': 0, 'missing-2': 0, 'missing-3': 0, 'missing-4': 0, 'missing-more': 0 };
   for (const s of scored) {
     const m = s.missing.length;
     if (m === 0) buckets['have-all']++;
     else if (m === 1) buckets['missing-1']++;
     else if (m === 2) buckets['missing-2']++;
     else if (m === 3) buckets['missing-3']++;
+    else if (m === 4) buckets['missing-4']++;
     else buckets['missing-more']++;
   }
 
@@ -1733,7 +1734,8 @@ function renderMakeResults() {
     { key: 'missing-1', label: `Missing 1 (${buckets['missing-1']})` },
     { key: 'missing-2', label: `Missing 2 (${buckets['missing-2']})` },
     { key: 'missing-3', label: `Missing 3 (${buckets['missing-3']})` },
-    { key: 'missing-more', label: `Missing 4+ (${buckets['missing-more']})` }
+    { key: 'missing-4', label: `Missing 4 (${buckets['missing-4']})` },
+    { key: 'missing-more', label: `Missing 5+ (${buckets['missing-more']})` }
   ];
   tabsEl.innerHTML = tabDefs.map(t =>
     `<button class="make-tab ${t.key === makeFilter ? 'active' : ''}" data-key="${t.key}">${escapeHtml(t.label)}</button>`
@@ -1752,7 +1754,8 @@ function renderMakeResults() {
     if (makeFilter === 'missing-1') return m === 1;
     if (makeFilter === 'missing-2') return m === 2;
     if (makeFilter === 'missing-3') return m === 3;
-    if (makeFilter === 'missing-more') return m >= 4;
+    if (makeFilter === 'missing-4') return m === 4;
+    if (makeFilter === 'missing-more') return m >= 5;
     return true;
   });
   // Sort by have-ratio descending, then missing count ascending
