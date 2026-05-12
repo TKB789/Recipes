@@ -1504,7 +1504,22 @@ function renderPantry() {
     const li = document.createElement('li');
     const days = daysUntilExpiry(item);
     const isExpired = days !== null && days < 0;
-    li.className = 'pantry-item' + (item.used ? ' used' : '') + (isExpired ? ' expired' : '');
+    const isSelected = cookWithMode && cookWithStaged.has(item.name);
+    li.className = 'pantry-item' + (item.used ? ' used' : '') + (isExpired ? ' expired' : '') + (isSelected ? ' cook-selected' : '');
+
+    if (cookWithMode && !item.used) {
+      // In cook-with mode, the whole row toggles selection. We hide the
+      // regular checkbox and use a styled circular indicator instead.
+      li.innerHTML = `
+        <span class="cook-with-marker ${isSelected ? 'on' : ''}">${isSelected ? '✓' : ''}</span>
+        <span class="item-name">${escapeHtml(item.name)}</span>
+        ${item.expiresAt ? `<span class="expiry-badge ${expiryStatusClass(item)}">${expiryBadgeInner(item)}</span>` : ''}
+      `;
+      li.addEventListener('click', () => toggleCookWithItem(item.name));
+      (lists[item.location] || lists.pantry).appendChild(li);
+      continue;
+    }
+
     li.innerHTML = `
       <input type="checkbox" ${item.used?'checked':''}>
       <span class="item-name">${escapeHtml(item.name)}</span>
@@ -1793,72 +1808,82 @@ document.getElementById('whatCanIMakeBtn').addEventListener('click', () => {
 document.getElementById('makeClose').addEventListener('click', () => makeModal.classList.remove('open'));
 makeModal.addEventListener('click', (e) => { if (e.target === makeModal) makeModal.classList.remove('open'); });
 
-// "Cook with…" — open a picker of kitchen items, then show recipes that
-// use at least one of the selected items.
-document.getElementById('cookWithBtn').addEventListener('click', async () => {
+// "Cook with…" — enter an in-page selection mode where the user taps
+// kitchen items directly to pick what they want to cook with. A floating
+// bar shows the running selection + a "Find recipes" button.
+let cookWithMode = false;
+const cookWithStaged = new Set(); // pantry item NAMES selected for cooking
+
+document.getElementById('cookWithBtn').addEventListener('click', () => {
   const available = state.pantry.filter(p => !p.used);
   if (!available.length) {
     toast('Add items to your kitchen first');
     return;
   }
-  const picked = await pickKitchenItems(available);
-  if (!picked || !picked.length) return;
-  cookWithSelection = picked;
-  makeFilter = 'have-all';
-  renderMakeResults();
-  makeModal.classList.add('open');
+  enterCookWithMode();
 });
 
-// Modal picker: multi-select kitchen items via tappable chips.
-// Resolves to array of item names (the original pantry strings).
-function pickKitchenItems(items) {
-  return new Promise(resolve => {
-    const sheet = document.createElement('div');
-    sheet.className = 'modal location-picker open';
-    sheet.innerHTML = `
-      <div class="modal-card location-card">
-        <div class="modal-scroll">
-          <h2 class="picker-title">Cook with…</h2>
-          <p class="picker-hint" style="margin-bottom:14px">Tap items you want to use. We'll find recipes that include at least one of them.</p>
-          <div class="kitchen-chips" id="kitchenChips">
-            ${items.map(it => `
-              <button class="kitchen-chip" data-name="${escapeAttr(it.name)}">
-                <span class="chip-name">${escapeHtml(it.name)}</span>
-              </button>
-            `).join('')}
-          </div>
-          <div class="detail-actions">
-            <button class="primary-btn" id="cookWithConfirm">Find recipes</button>
-            <button class="primary-btn outline" id="cookWithCancel">Cancel</button>
-          </div>
-        </div>
-      </div>
-    `;
-    document.body.appendChild(sheet);
-    const selected = new Set();
-    const cleanup = (val) => {
-      sheet.classList.remove('open');
-      setTimeout(() => sheet.remove(), 200);
-      resolve(val);
-    };
-    sheet.querySelectorAll('.kitchen-chip').forEach(chip => {
-      chip.addEventListener('click', () => {
-        const n = chip.dataset.name;
-        if (selected.has(n)) {
-          selected.delete(n);
-          chip.classList.remove('on');
-        } else {
-          selected.add(n);
-          chip.classList.add('on');
-        }
-      });
-    });
-    sheet.querySelector('#cookWithConfirm').addEventListener('click', () => {
-      if (!selected.size) { toast('Pick at least one item'); return; }
-      cleanup(Array.from(selected));
-    });
-    sheet.querySelector('#cookWithCancel').addEventListener('click', () => cleanup(null));
-    sheet.addEventListener('click', e => { if (e.target === sheet) cleanup(null); });
+function enterCookWithMode() {
+  cookWithMode = true;
+  cookWithStaged.clear();
+  document.body.classList.add('cook-with-mode');
+  renderPantry();
+  renderCookWithBar();
+  // Scroll the kitchen tab into view if not already there
+  document.querySelector('.tab[data-tab="kitchen"]').click();
+}
+
+function exitCookWithMode() {
+  cookWithMode = false;
+  cookWithStaged.clear();
+  document.body.classList.remove('cook-with-mode');
+  renderPantry();
+  const bar = document.getElementById('cookWithBar');
+  if (bar) bar.remove();
+}
+
+function toggleCookWithItem(name) {
+  if (cookWithStaged.has(name)) {
+    cookWithStaged.delete(name);
+  } else {
+    cookWithStaged.add(name);
+  }
+  renderPantry();
+  renderCookWithBar();
+}
+
+function renderCookWithBar() {
+  let bar = document.getElementById('cookWithBar');
+  if (!bar) {
+    bar = document.createElement('div');
+    bar.id = 'cookWithBar';
+    bar.className = 'cook-with-bar';
+    document.body.appendChild(bar);
+  }
+  const count = cookWithStaged.size;
+  const namesPreview = Array.from(cookWithStaged).slice(0, 3);
+  const more = count - namesPreview.length;
+  bar.innerHTML = `
+    <div class="cook-with-bar-info">
+      ${count === 0
+        ? '<span class="muted">Tap items in your kitchen to select</span>'
+        : `<span class="cook-with-count">${count} selected</span>
+           <span class="cook-with-names">${namesPreview.map(escapeHtml).join(', ')}${more > 0 ? `, +${more}` : ''}</span>`
+      }
+    </div>
+    <div class="cook-with-bar-actions">
+      <button class="primary-btn outline cook-with-cancel">Cancel</button>
+      <button class="primary-btn cook-with-find" ${count === 0 ? 'disabled' : ''}>Find recipes</button>
+    </div>
+  `;
+  bar.querySelector('.cook-with-cancel').addEventListener('click', exitCookWithMode);
+  bar.querySelector('.cook-with-find').addEventListener('click', () => {
+    if (cookWithStaged.size === 0) return;
+    cookWithSelection = Array.from(cookWithStaged);
+    exitCookWithMode();
+    makeFilter = 'have-all';
+    renderMakeResults();
+    makeModal.classList.add('open');
   });
 }
 
@@ -2032,7 +2057,8 @@ function renderMakeResults() {
 // Build a "search the web" footer based on the current selection (or the
 // kitchen contents if no selection). Opens Google in a new tab.
 function webSearchFooterHtml() {
-  const terms = cookWithSelection.length
+  const usingSelection = cookWithSelection.length > 0;
+  const terms = usingSelection
     ? cookWithSelection
     : state.pantry.filter(p => !p.used).slice(0, 6).map(p => p.name);
   if (!terms.length) return '';
@@ -2040,10 +2066,16 @@ function webSearchFooterHtml() {
   const gUrl = 'https://www.google.com/search?q=' + encodeURIComponent(query);
   const ymUrl = 'https://www.youtube.com/results?search_query=' + encodeURIComponent(query);
   const allUrl = 'https://www.allrecipes.com/search?q=' + encodeURIComponent(terms.join(' '));
+  const heading = usingSelection
+    ? 'Want more options? Search the web'
+    : 'Nothing here? Search the web';
+  const sub = usingSelection
+    ? `Find more recipes online using ${escapeHtml(terms.slice(0,4).join(', '))}${terms.length > 4 ? '…' : ''}`
+    : `Look beyond your library for ideas using ${escapeHtml(terms.slice(0,4).join(', '))}${terms.length > 4 ? '…' : ''}`;
   return `
     <div class="web-search-footer">
-      <h4>Nothing here? Search the web</h4>
-      <p class="muted">Look beyond your library for ideas using ${escapeHtml(terms.slice(0,4).join(', '))}${terms.length > 4 ? '…' : ''}</p>
+      <h4>${escapeHtml(heading)}</h4>
+      <p class="muted">${sub}</p>
       <div class="web-search-buttons">
         <a class="web-search-btn" href="${gUrl}" target="_blank" rel="noopener noreferrer">Google</a>
         <a class="web-search-btn" href="${ymUrl}" target="_blank" rel="noopener noreferrer">YouTube</a>
