@@ -824,6 +824,16 @@ main { padding: 20px 18px; max-width: 900px; margin: 0 auto; }
   letter-spacing: 0.04em;
   text-transform: uppercase;
 }
+.make-selection-match {
+  display: inline-block;
+  font-size: 11px;
+  background: var(--terracotta);
+  color: var(--paper);
+  padding: 2px 8px;
+  border-radius: 999px;
+  font-weight: 600;
+  margin-bottom: 4px;
+}
 
 /* ===== Ingredient highlights in recipe detail ===== */
 .ingredients-summary {

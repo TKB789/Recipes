@@ -138,19 +138,74 @@ function ingredientStem(text) {
     .map(w => w.replace(/'s$/, '').replace(/s$/, ''));
 }
 
+// Words like "broth", "stock", "lard", "fat" that turn a protein name into a
+// different ingredient. "Chicken broth" is NOT the same as "chicken" the
+// protein — if you're cooking with chicken thighs, a recipe calling for
+// chicken broth doesn't actually use your protein.
+const COMPOUND_MODIFIERS = new Set([
+  'broth','stock','bouillon','consomme','consommé','fat','lard','grease',
+  'powder','seasoning','salt','sauce','paste','extract','flavor','flavoring',
+  'bouquet','dust','crumb','crumbs','flour'
+]);
+
+// Returns true if the ingredient line is a "compound" usage of the given stem,
+// like "chicken broth" when stem = "chicken". These shouldn't count as the
+// real protein being present.
+function isCompoundUse(ingredientText, stemWord) {
+  if (!ingredientText || !stemWord) return false;
+  const lower = ingredientText.toLowerCase();
+  const idx = lower.indexOf(stemWord);
+  if (idx === -1) return false;
+  // Look at the next word after the stem (e.g. "chicken broth" -> "broth")
+  const after = lower.slice(idx + stemWord.length).trimStart();
+  const nextWord = after.split(/[\s,)]/)[0].replace(/[^a-z]/g, '');
+  return COMPOUND_MODIFIERS.has(nextWord);
+}
+
 // Does pantry contain an item matching a recipe ingredient?
-// Both go through ingredientStem(); if any non-trivial word overlaps, it's a match.
-function pantryMatchesIngredient(pantryItems, ingredientText) {
+// Both go through ingredientStem(); if any non-trivial word overlaps, it's a
+// match — UNLESS the recipe ingredient is a compound use like "chicken broth"
+// when the pantry item is "chicken" the protein.
+function pantryMatchesIngredient(pantryItems, ingredientText, opts = {}) {
+  const { strict = false } = opts;
   const wanted = new Set(ingredientStem(ingredientText));
   if (wanted.size === 0) return null;
   for (const p of pantryItems) {
     if (p.used) continue;
     const have = ingredientStem(p.name);
     for (const w of have) {
-      if (wanted.has(w)) return p; // first match wins
+      if (wanted.has(w)) {
+        // In strict mode, reject compound uses (chicken broth ≠ chicken)
+        if (strict && isCompoundUse(ingredientText, w)) continue;
+        return p; // first match wins
+      }
     }
   }
   return null;
+}
+
+// Stronger check used by "Cook with…": is the selected pantry item *central*
+// to this recipe? Central means it appears in the title, the mainIngredient
+// field, OR as a primary (non-compound) ingredient.
+function recipeUsesPantryItemCentrally(recipe, pantryItem) {
+  const stems = ingredientStem(pantryItem.name);
+  if (!stems.length) return false;
+  const title = (recipe.title || '').toLowerCase();
+  const main = (recipe.mainIngredient || '').toLowerCase();
+  for (const stem of stems) {
+    if (title.includes(stem)) return true;
+    if (main.includes(stem)) return true;
+  }
+  // Check ingredient list with strict mode — skip "chicken broth" etc.
+  for (const ing of (recipe.ingredients || [])) {
+    const lower = ing.toLowerCase();
+    for (const stem of stems) {
+      if (lower.includes(stem) && !isCompoundUse(ing, stem)) {
+        return true;
+      }
+    }
+  }
+  return false;
 }
 
 // Mini-sheet for what to do when tapping an expiry badge.
@@ -788,15 +843,22 @@ function renderLibrary() {
   if (state.filterMain) {
     recipes = recipes.filter(r => (r.mainIngredient||'').trim() === state.filterMain);
   }
-  // Apply text search (over title, cuisine, main, and ingredients)
+  // Apply text search (over title, cuisine, main, and ingredients). Skip
+  // compound uses like "chicken broth" matching "chicken" — those tend to
+  // surprise users who edited a recipe's main ingredient.
   if (state.searchTerm) {
-    const q = state.searchTerm.toLowerCase();
-    recipes = recipes.filter(r =>
-      r.title.toLowerCase().includes(q) ||
-      (r.cuisine||'').toLowerCase().includes(q) ||
-      (r.mainIngredient||'').toLowerCase().includes(q) ||
-      (r.ingredients||[]).some(i => i.toLowerCase().includes(q))
-    );
+    const q = state.searchTerm.toLowerCase().trim();
+    recipes = recipes.filter(r => {
+      if (r.title.toLowerCase().includes(q)) return true;
+      if ((r.cuisine||'').toLowerCase().includes(q)) return true;
+      if ((r.mainIngredient||'').toLowerCase().includes(q)) return true;
+      // Ingredient match — but exclude compound uses
+      return (r.ingredients||[]).some(i => {
+        const lower = i.toLowerCase();
+        if (!lower.includes(q)) return false;
+        return !isCompoundUse(i, q);
+      });
+    });
   }
 
   if (!recipes.length) {
@@ -1802,12 +1864,13 @@ function pickKitchenItems(items) {
 
 // Score every recipe by how many ingredients we have on hand vs missing.
 // Returns array of {recipe, missing: [string], have: number, total: number,
-// matchesSelection: bool}
+// matchesSelection: bool, selectionMatches: number}
 function scoreRecipesByPantry() {
   const available = state.pantry.filter(p => !p.used);
   // When user selected "cook with X, Y", we require that the recipe actually
-  // calls for at least one of X or Y. We compute this by checking each recipe
-  // ingredient against just the selected pantry items.
+  // uses one of X or Y as a primary ingredient (in title, mainIngredient, or
+  // a non-compound ingredient line). So "chicken broth" doesn't qualify if
+  // you selected "chicken thighs".
   const selectionItems = cookWithSelection.length
     ? available.filter(p => cookWithSelection.includes(p.name))
     : null;
@@ -1816,17 +1879,23 @@ function scoreRecipesByPantry() {
     const missing = [];
     let have = 0;
     let matchesSelection = !selectionItems; // true when no filter applied
+    let selectionMatches = 0;
     for (const ing of ingredients) {
       if (pantryMatchesIngredient(available, ing)) {
         have++;
       } else {
         missing.push(ing);
       }
-      if (selectionItems && pantryMatchesIngredient(selectionItems, ing)) {
-        matchesSelection = true;
-      }
     }
-    return { recipe: r, missing, have, total: ingredients.length, matchesSelection };
+    if (selectionItems) {
+      // Count how many of the selected items the recipe centrally uses.
+      // More matches = ranked higher.
+      for (const it of selectionItems) {
+        if (recipeUsesPantryItemCentrally(r, it)) selectionMatches++;
+      }
+      matchesSelection = selectionMatches > 0;
+    }
+    return { recipe: r, missing, have, total: ingredients.length, matchesSelection, selectionMatches };
   })
     .filter(s => s.total > 0) // skip recipes with no ingredients listed
     .filter(s => s.matchesSelection); // honor the "cook with" filter
@@ -1903,8 +1972,13 @@ function renderMakeResults() {
     if (makeFilter === 'missing-more') return m >= 5;
     return true;
   });
-  // Sort by have-ratio descending, then missing count ascending
+  // Sort by selection-match count first when cook-with is active (so recipes
+  // using more of your selected items rise to the top), then by have-ratio,
+  // then by missing count.
   filtered.sort((a, b) => {
+    if (cookWithSelection.length && b.selectionMatches !== a.selectionMatches) {
+      return b.selectionMatches - a.selectionMatches;
+    }
     const ra = a.have / a.total;
     const rb = b.have / b.total;
     if (rb !== ra) return rb - ra;
@@ -1928,11 +2002,17 @@ function renderMakeResults() {
     const missingLine = s.missing.length === 0
       ? `<div class="make-ratio">✓ Have all ${s.total} ingredients</div>`
       : `<div class="make-missing">Missing: <strong>${s.missing.slice(0, 3).map(escapeHtml).join(', ')}${s.missing.length > 3 ? `, +${s.missing.length - 3} more` : ''}</strong></div>`;
+    // When cook-with is active, show how many of the selected items
+    // this recipe actually uses ("Uses 3 of 4 selected")
+    const selectionLine = cookWithSelection.length
+      ? `<div class="make-selection-match">🥘 Uses ${s.selectionMatches} of ${cookWithSelection.length} selected</div>`
+      : '';
     return `
       <div class="make-recipe" data-id="${r.id}">
         <div class="make-thumb" ${thumbStyle}></div>
         <div class="make-info">
           <h3 class="make-info-title">${escapeHtml(r.title)}</h3>
+          ${selectionLine}
           <div class="make-info-meta">${s.have}/${s.total} ingredients on hand</div>
           ${missingLine}
         </div>
