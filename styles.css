@@ -825,6 +825,189 @@ main { padding: 20px 18px; max-width: 900px; margin: 0 auto; }
   text-transform: uppercase;
 }
 
+/* ===== Ingredient highlights in recipe detail ===== */
+.ingredients-summary {
+  font-size: 13px;
+  margin: 0 0 12px;
+}
+.ingredients-summary .have-count {
+  color: var(--olive);
+  font-weight: 600;
+}
+.ingredients-summary .need-count {
+  color: var(--terracotta-deep);
+  font-weight: 600;
+}
+.ingredient-list {
+  list-style: none !important;
+  padding-left: 0 !important;
+  margin: 0;
+}
+.ingredient-line {
+  display: flex;
+  align-items: flex-start;
+  gap: 10px;
+  padding: 6px 0;
+  font-size: 15px;
+  line-height: 1.5;
+}
+.ing-marker {
+  flex-shrink: 0;
+  width: 22px;
+  height: 22px;
+  border-radius: 50%;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-size: 12px;
+  font-weight: 700;
+  border: 1.5px solid var(--line);
+  background: var(--cream);
+  color: var(--ink-soft);
+  margin-top: 1px;
+}
+.ingredient-line.have .ing-marker {
+  background: var(--olive);
+  color: var(--paper);
+  border-color: var(--olive);
+}
+.ingredient-line.have .ing-text {
+  color: var(--olive);
+}
+.ingredient-line.need .ing-marker {
+  border-color: var(--terracotta);
+  color: var(--terracotta);
+}
+.ingredient-actions {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  margin-top: 14px;
+}
+.add-ingredients-btn.terra {
+  background: var(--terracotta);
+  color: var(--paper);
+  border-color: var(--terracotta);
+  font-weight: 600;
+}
+
+/* ===== Cook-with chips ===== */
+.kitchen-action-row {
+  display: flex;
+  gap: 8px;
+  margin-bottom: 16px;
+}
+.kitchen-action-row .make-btn,
+.kitchen-action-row .cook-with-btn {
+  flex: 1;
+  margin-bottom: 0;
+  font-size: 14px;
+  padding: 14px 12px;
+}
+.cook-with-btn {
+  background: transparent;
+  color: var(--terracotta);
+  border-color: var(--terracotta);
+}
+.kitchen-chips {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
+  margin-bottom: 18px;
+}
+.kitchen-chip {
+  background: var(--cream);
+  border: 1px solid var(--line);
+  border-radius: 999px;
+  padding: 8px 14px;
+  font-family: inherit;
+  font-size: 14px;
+  color: var(--ink);
+  cursor: pointer;
+  transition: all .15s;
+}
+.kitchen-chip:active { transform: scale(0.96); }
+.kitchen-chip.on {
+  background: var(--terracotta);
+  color: var(--paper);
+  border-color: var(--terracotta);
+  font-weight: 600;
+}
+.chip-name { white-space: nowrap; }
+
+.active-chip {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  background: var(--terracotta);
+  color: var(--paper);
+  border-radius: 999px;
+  padding: 3px 4px 3px 10px;
+  font-size: 12px;
+  font-weight: 500;
+  margin-right: 4px;
+  margin-bottom: 4px;
+}
+.active-chip-x {
+  background: rgba(255,255,255,0.25);
+  color: var(--paper);
+  border: none;
+  border-radius: 50%;
+  width: 18px;
+  height: 18px;
+  font-size: 13px;
+  line-height: 1;
+  cursor: pointer;
+  font-family: inherit;
+  padding: 0;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}
+
+/* ===== Web search footer ===== */
+.web-search-footer {
+  margin-top: 20px;
+  padding: 16px;
+  background: var(--cream);
+  border: 1px dashed var(--line);
+  border-radius: var(--radius);
+  text-align: center;
+}
+.web-search-footer h4 {
+  margin: 0 0 6px;
+  font-family: 'Fraunces', serif;
+  font-size: 17px;
+  font-style: italic;
+  color: var(--terracotta-deep);
+}
+.web-search-footer p {
+  margin: 0 0 12px;
+  font-size: 13px;
+}
+.web-search-buttons {
+  display: flex;
+  gap: 8px;
+  justify-content: center;
+  flex-wrap: wrap;
+}
+.web-search-btn {
+  background: var(--paper);
+  border: 1px solid var(--line);
+  border-radius: 999px;
+  padding: 8px 16px;
+  font-family: inherit;
+  font-size: 13px;
+  font-weight: 500;
+  text-decoration: none;
+  color: var(--ink);
+  transition: all .15s;
+}
+.web-search-btn:active {
+  transform: scale(0.95);
+  background: var(--cream-deep);
+}
+
 /* Bottom-sheet picker for kitchen location */
 .location-picker .modal-card {
   max-width: 480px;

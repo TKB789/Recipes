@@ -900,7 +900,24 @@ function openRecipe(id, mode='view') {
 
 function renderRecipeView(r) {
   const img = r.image ? `<div class="detail-image" style="background-image:url('${escapeAttr(r.image)}')"></div>` : '';
-  const ingredientsList = (r.ingredients||[]).map(i => `<li>${escapeHtml(i)}</li>`).join('') || '<li class="muted">None listed</li>';
+  const available = state.pantry.filter(p => !p.used);
+  const ingredients = r.ingredients || [];
+  // Categorize each ingredient line as in-kitchen vs missing
+  const ingredientStatus = ingredients.map(line => ({
+    line,
+    inKitchen: !!pantryMatchesIngredient(available, line)
+  }));
+  const haveCount = ingredientStatus.filter(i => i.inKitchen).length;
+  const missingCount = ingredients.length - haveCount;
+
+  const ingredientsList = ingredientStatus.length
+    ? ingredientStatus.map(i => `
+        <li class="ingredient-line ${i.inKitchen ? 'have' : 'need'}">
+          <span class="ing-marker">${i.inKitchen ? '✓' : '○'}</span>
+          <span class="ing-text">${escapeHtml(i.line)}</span>
+        </li>
+      `).join('')
+    : '<li class="muted">None listed</li>';
   const instructionsList = (r.instructions||[]).map(i => `<li>${escapeHtml(i)}</li>`).join('') || '<li class="muted">None listed</li>';
 
   modalContent.innerHTML = `
@@ -919,8 +936,14 @@ function renderRecipeView(r) {
     </div>
     <div class="detail-section">
       <h3>Ingredients</h3>
-      <ul>${ingredientsList}</ul>
-      ${(r.ingredients||[]).length ? '<button class="add-ingredients-btn" id="addAllToShopping">+ Add all to shopping list</button>' : ''}
+      ${ingredients.length ? `<p class="ingredients-summary"><span class="have-count">${haveCount} in kitchen</span> · <span class="need-count">${missingCount} to buy</span></p>` : ''}
+      <ul class="ingredient-list">${ingredientsList}</ul>
+      ${ingredients.length ? `
+        <div class="ingredient-actions">
+          ${missingCount > 0 ? `<button class="add-ingredients-btn terra" id="addMissingToShopping">+ Add ${missingCount} missing to shopping</button>` : ''}
+          <button class="add-ingredients-btn" id="addAllToShopping">+ Add all to shopping</button>
+        </div>
+      ` : ''}
     </div>
     <div class="detail-section">
       <h3>Instructions</h3>
@@ -979,6 +1002,19 @@ function renderRecipeView(r) {
         state.shopping.push(item);
       }
       toast(`Added ${r.ingredients.length} items to shopping list`);
+      renderShopping();
+    });
+  }
+  const addMissingBtn = document.getElementById('addMissingToShopping');
+  if (addMissingBtn) {
+    addMissingBtn.addEventListener('click', async () => {
+      const missing = ingredientStatus.filter(i => !i.inKitchen);
+      for (const i of missing) {
+        const item = { id: uid(), name: i.line, checked: false, createdAt: Date.now() };
+        await dbPut('shopping', item);
+        state.shopping.push(item);
+      }
+      toast(`Added ${missing.length} missing items to shopping`);
       renderShopping();
     });
   }
@@ -1684,38 +1720,147 @@ document.getElementById('clearCheckedBtn').addEventListener('click', async () =>
    ===================================================== */
 const makeModal = document.getElementById('makeModal');
 let makeFilter = 'have-all'; // current "missing N" filter
+let cookWithSelection = []; // pantry-item IDs to require — empty = no filter
 
 document.getElementById('whatCanIMakeBtn').addEventListener('click', () => {
   makeFilter = 'have-all';
+  cookWithSelection = [];
   renderMakeResults();
   makeModal.classList.add('open');
 });
 document.getElementById('makeClose').addEventListener('click', () => makeModal.classList.remove('open'));
 makeModal.addEventListener('click', (e) => { if (e.target === makeModal) makeModal.classList.remove('open'); });
 
+// "Cook with…" — open a picker of kitchen items, then show recipes that
+// use at least one of the selected items.
+document.getElementById('cookWithBtn').addEventListener('click', async () => {
+  const available = state.pantry.filter(p => !p.used);
+  if (!available.length) {
+    toast('Add items to your kitchen first');
+    return;
+  }
+  const picked = await pickKitchenItems(available);
+  if (!picked || !picked.length) return;
+  cookWithSelection = picked;
+  makeFilter = 'have-all';
+  renderMakeResults();
+  makeModal.classList.add('open');
+});
+
+// Modal picker: multi-select kitchen items via tappable chips.
+// Resolves to array of item names (the original pantry strings).
+function pickKitchenItems(items) {
+  return new Promise(resolve => {
+    const sheet = document.createElement('div');
+    sheet.className = 'modal location-picker open';
+    sheet.innerHTML = `
+      <div class="modal-card location-card">
+        <div class="modal-scroll">
+          <h2 class="picker-title">Cook with…</h2>
+          <p class="picker-hint" style="margin-bottom:14px">Tap items you want to use. We'll find recipes that include at least one of them.</p>
+          <div class="kitchen-chips" id="kitchenChips">
+            ${items.map(it => `
+              <button class="kitchen-chip" data-name="${escapeAttr(it.name)}">
+                <span class="chip-name">${escapeHtml(it.name)}</span>
+              </button>
+            `).join('')}
+          </div>
+          <div class="detail-actions">
+            <button class="primary-btn" id="cookWithConfirm">Find recipes</button>
+            <button class="primary-btn outline" id="cookWithCancel">Cancel</button>
+          </div>
+        </div>
+      </div>
+    `;
+    document.body.appendChild(sheet);
+    const selected = new Set();
+    const cleanup = (val) => {
+      sheet.classList.remove('open');
+      setTimeout(() => sheet.remove(), 200);
+      resolve(val);
+    };
+    sheet.querySelectorAll('.kitchen-chip').forEach(chip => {
+      chip.addEventListener('click', () => {
+        const n = chip.dataset.name;
+        if (selected.has(n)) {
+          selected.delete(n);
+          chip.classList.remove('on');
+        } else {
+          selected.add(n);
+          chip.classList.add('on');
+        }
+      });
+    });
+    sheet.querySelector('#cookWithConfirm').addEventListener('click', () => {
+      if (!selected.size) { toast('Pick at least one item'); return; }
+      cleanup(Array.from(selected));
+    });
+    sheet.querySelector('#cookWithCancel').addEventListener('click', () => cleanup(null));
+    sheet.addEventListener('click', e => { if (e.target === sheet) cleanup(null); });
+  });
+}
+
 // Score every recipe by how many ingredients we have on hand vs missing.
-// Returns array of {recipe, missing: [string], have: number, total: number}
+// Returns array of {recipe, missing: [string], have: number, total: number,
+// matchesSelection: bool}
 function scoreRecipesByPantry() {
   const available = state.pantry.filter(p => !p.used);
+  // When user selected "cook with X, Y", we require that the recipe actually
+  // calls for at least one of X or Y. We compute this by checking each recipe
+  // ingredient against just the selected pantry items.
+  const selectionItems = cookWithSelection.length
+    ? available.filter(p => cookWithSelection.includes(p.name))
+    : null;
   return state.recipes.map(r => {
     const ingredients = r.ingredients || [];
     const missing = [];
     let have = 0;
+    let matchesSelection = !selectionItems; // true when no filter applied
     for (const ing of ingredients) {
       if (pantryMatchesIngredient(available, ing)) {
         have++;
       } else {
         missing.push(ing);
       }
+      if (selectionItems && pantryMatchesIngredient(selectionItems, ing)) {
+        matchesSelection = true;
+      }
     }
-    return { recipe: r, missing, have, total: ingredients.length };
-  }).filter(s => s.total > 0); // skip recipes with no ingredients listed
+    return { recipe: r, missing, have, total: ingredients.length, matchesSelection };
+  })
+    .filter(s => s.total > 0) // skip recipes with no ingredients listed
+    .filter(s => s.matchesSelection); // honor the "cook with" filter
 }
 
 function renderMakeResults() {
   const scored = scoreRecipesByPantry();
   const tabsEl = document.getElementById('makeTabs');
   const resultsEl = document.getElementById('makeResults');
+  const introEl = document.getElementById('makeIntro');
+
+  // Update header to reflect cook-with selection
+  if (cookWithSelection.length) {
+    const chipsHtml = cookWithSelection.map(name =>
+      `<span class="active-chip">${escapeHtml(name)} <button class="active-chip-x" data-name="${escapeAttr(name)}" aria-label="Remove">×</button></span>`
+    ).join('');
+    introEl.innerHTML = `
+      Cooking with: ${chipsHtml}
+      <button class="link-btn" id="clearCookWithBtn" style="margin-left:8px">Clear</button>
+    `;
+    introEl.querySelectorAll('.active-chip-x').forEach(btn => {
+      btn.addEventListener('click', () => {
+        cookWithSelection = cookWithSelection.filter(n => n !== btn.dataset.name);
+        renderMakeResults();
+      });
+    });
+    const clearBtn = document.getElementById('clearCookWithBtn');
+    if (clearBtn) clearBtn.addEventListener('click', () => {
+      cookWithSelection = [];
+      renderMakeResults();
+    });
+  } else {
+    introEl.textContent = 'Recipes ranked by what you have on hand.';
+  }
 
   // Build dynamic tabs based on what's actually achievable
   const buckets = { 'have-all': 0, 'missing-1': 0, 'missing-2': 0, 'missing-3': 0, 'missing-4': 0, 'missing-more': 0 };
@@ -1772,7 +1917,8 @@ function renderMakeResults() {
         <p>Nothing in this bucket.</p>
         <p class="muted">Try a different "missing" tab, or add more items to your kitchen.</p>
       </div>
-    `;
+    ` + webSearchFooterHtml();
+    wireWebSearchFooter(resultsEl);
     return;
   }
 
@@ -1792,7 +1938,7 @@ function renderMakeResults() {
         </div>
       </div>
     `;
-  }).join('');
+  }).join('') + webSearchFooterHtml();
 
   resultsEl.querySelectorAll('.make-recipe').forEach(el => {
     el.addEventListener('click', () => {
@@ -1800,6 +1946,35 @@ function renderMakeResults() {
       openRecipe(el.dataset.id);
     });
   });
+  wireWebSearchFooter(resultsEl);
+}
+
+// Build a "search the web" footer based on the current selection (or the
+// kitchen contents if no selection). Opens Google in a new tab.
+function webSearchFooterHtml() {
+  const terms = cookWithSelection.length
+    ? cookWithSelection
+    : state.pantry.filter(p => !p.used).slice(0, 6).map(p => p.name);
+  if (!terms.length) return '';
+  const query = 'recipe with ' + terms.join(', ');
+  const gUrl = 'https://www.google.com/search?q=' + encodeURIComponent(query);
+  const ymUrl = 'https://www.youtube.com/results?search_query=' + encodeURIComponent(query);
+  const allUrl = 'https://www.allrecipes.com/search?q=' + encodeURIComponent(terms.join(' '));
+  return `
+    <div class="web-search-footer">
+      <h4>Nothing here? Search the web</h4>
+      <p class="muted">Look beyond your library for ideas using ${escapeHtml(terms.slice(0,4).join(', '))}${terms.length > 4 ? '…' : ''}</p>
+      <div class="web-search-buttons">
+        <a class="web-search-btn" href="${gUrl}" target="_blank" rel="noopener noreferrer">Google</a>
+        <a class="web-search-btn" href="${ymUrl}" target="_blank" rel="noopener noreferrer">YouTube</a>
+        <a class="web-search-btn" href="${allUrl}" target="_blank" rel="noopener noreferrer">AllRecipes</a>
+      </div>
+    </div>
+  `;
+}
+function wireWebSearchFooter(_root) {
+  // Links use target="_blank" so the click handler is just the browser default.
+  // Placeholder in case we want to add tracking or in-app browsing later.
 }
 
 /* =====================================================
