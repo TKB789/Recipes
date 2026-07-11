@@ -2,6 +2,21 @@
    Citrus&Spice Recipe App
    ===================================================== */
 
+// URL of the deployed nutrition tracker (loaded in the Nutrition tab).
+// Set this to your nutrients app's GitHub Pages URL, e.g.
+// 'https://YOUR-USERNAME.github.io/nutrients/'
+const NUTRITION_APP_URL = 'https://YOUR-USERNAME.github.io/nutrients/';
+
+function loadNutritionFrame() {
+  const frame = document.getElementById('nutritionFrame');
+  if (!frame) return;
+  if (NUTRITION_APP_URL.includes('YOUR-USERNAME')) {
+    document.getElementById('nutritionNote').style.display = 'block';
+    return;
+  }
+  if (!frame.src) frame.src = NUTRITION_APP_URL; // lazy-load on first open
+}
+
 // ----- IndexedDB Wrapper -----
 const DB_NAME = 'spicycitrus_db';
 const DB_VERSION = 1;
@@ -94,6 +109,7 @@ document.querySelectorAll('.tab').forEach(btn => {
     btn.classList.add('active');
     document.getElementById('tab-' + btn.dataset.tab).classList.add('active');
     if (btn.dataset.tab === 'rotation') drawWheel();
+    if (btn.dataset.tab === 'nutrition') loadNutritionFrame();
   });
 });
 
@@ -947,11 +963,27 @@ const modalContent = document.getElementById('modalContent');
 document.getElementById('modalClose').addEventListener('click', closeModal);
 modal.addEventListener('click', (e) => { if (e.target === modal) closeModal(); });
 
-function closeModal() { modal.classList.remove('open'); }
+function closeModal() {
+  modal.classList.remove('open');
+  if (location.hash.startsWith('#recipe-')) history.replaceState(null, '', location.pathname + location.search);
+}
+
+// Deep links: #recipe-<id> opens that recipe (used by the nutrition tracker
+// and shareable from the address bar / Copy Link button).
+function openFromHash() {
+  const m = location.hash.match(/^#recipe-(.+)$/);
+  if (!m) return;
+  const id = decodeURIComponent(m[1]);
+  if (state.recipes.some(r => r.id === id)) openRecipe(id);
+}
+window.addEventListener('hashchange', openFromHash);
 
 function openRecipe(id, mode='view') {
   const r = state.recipes.find(x => x.id === id);
   if (!r) return;
+  if (mode === 'view') {
+    history.replaceState(null, '', '#recipe-' + encodeURIComponent(id));
+  }
   if (mode === 'edit') {
     renderRecipeEdit(r);
   } else {
@@ -1018,6 +1050,7 @@ function renderRecipeView(r) {
     ${r.sourceUrl ? `<div class="detail-source">Source: <a href="${escapeAttr(r.sourceUrl)}" target="_blank" rel="noopener">${escapeHtml(r.sourceUrl)}</a></div>` : ''}
     <div class="detail-actions">
       <button class="primary-btn" id="saveNotesBtn">Save Notes</button>
+      <button class="primary-btn outline" id="copyLinkBtn">Copy Link</button>
       <button class="primary-btn outline" id="deleteRecipeBtn" style="border-color:var(--terracotta);color:var(--terracotta)">Delete</button>
     </div>
   `;
@@ -1045,6 +1078,15 @@ function renderRecipeView(r) {
     r.notes = document.getElementById('recipeNotes').value;
     await dbPut('recipes', r);
     toast('Notes saved');
+  });
+  document.getElementById('copyLinkBtn').addEventListener('click', async () => {
+    const link = location.origin + location.pathname + '#recipe-' + encodeURIComponent(r.id);
+    try {
+      await navigator.clipboard.writeText(link);
+      toast('Link copied — paste it into the nutrition tracker');
+    } catch (e) {
+      prompt('Copy this link:', link);
+    }
   });
   document.getElementById('deleteRecipeBtn').addEventListener('click', async () => {
     if (!confirm('Delete this recipe?')) return;
@@ -2204,6 +2246,7 @@ async function init() {
     renderRotation();
     renderPantry();
     renderShopping();
+    openFromHash();
   } catch (e) {
     console.error('DB init failed', e);
     toast('Could not open database');

@@ -25,6 +25,7 @@
   <button class="tab" data-tab="library" role="tab">Library</button>
   <button class="tab" data-tab="kitchen" role="tab">Kitchen</button>
   <button class="tab" data-tab="shopping" role="tab">Shopping</button>
+  <button class="tab" data-tab="nutrition" role="tab">Nutrition</button>
 </nav>
 
 <main>
@@ -155,6 +156,13 @@
     </div>
     <ul class="shopping-list" id="shoppingList"></ul>
     <button class="link-btn" id="clearCheckedBtn">Clear checked items</button>
+  </section>
+  <!-- NUTRITION TAB -->
+  <section class="panel" id="tab-nutrition">
+    <iframe id="nutritionFrame" title="Nutrition tracker" loading="lazy"></iframe>
+    <p class="muted nutrition-note" id="nutritionNote" style="display:none">
+      Set NUTRITION_APP_URL at the top of app.js to your deployed nutrition app URL.
+    </p>
   </section>
 </main>
 
