@@ -5,7 +5,7 @@
 // URL of the deployed nutrition tracker (loaded in the Nutrition tab).
 // Set this to your nutrients app's GitHub Pages URL, e.g.
 // 'https://YOUR-USERNAME.github.io/nutrients/'
-const NUTRITION_APP_URL = 'https://YOUR-USERNAME.github.io/nutrients/';
+const NUTRITION_APP_URL = 'https://tkb789.github.io/nutrients/';
 
 function loadNutritionFrame() {
   const frame = document.getElementById('nutritionFrame');
@@ -1051,6 +1051,7 @@ function renderRecipeView(r) {
     <div class="detail-actions">
       <button class="primary-btn" id="saveNotesBtn">Save Notes</button>
       <button class="primary-btn outline" id="copyLinkBtn">Copy Link</button>
+      <button class="primary-btn outline" id="sendToNutritionBtn">Log to Nutrition</button>
       <button class="primary-btn outline" id="deleteRecipeBtn" style="border-color:var(--terracotta);color:var(--terracotta)">Delete</button>
     </div>
   `;
@@ -1078,6 +1079,23 @@ function renderRecipeView(r) {
     r.notes = document.getElementById('recipeNotes').value;
     await dbPut('recipes', r);
     toast('Notes saved');
+  });
+  document.getElementById('sendToNutritionBtn').addEventListener('click', () => {
+    const payload = {
+      type: 'cs-recipe-import',
+      title: r.title,
+      yield: r.yield || '',
+      ingredients: r.ingredients || [],
+      link: location.origin + location.pathname + '#recipe-' + encodeURIComponent(r.id),
+    };
+    try { localStorage.setItem('cs-nutrition-import', JSON.stringify(payload)); } catch (e) {}
+    closeModal();
+    document.querySelector('.tab[data-tab="nutrition"]').click();
+    const frame = document.getElementById('nutritionFrame');
+    if (frame && frame.src && frame.contentWindow) {
+      try { frame.contentWindow.postMessage(payload, new URL(NUTRITION_APP_URL).origin); } catch (e) {}
+    }
+    toast('Sent to Nutrition — match the ingredients there');
   });
   document.getElementById('copyLinkBtn').addEventListener('click', async () => {
     const link = location.origin + location.pathname + '#recipe-' + encodeURIComponent(r.id);
