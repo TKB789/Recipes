@@ -7,16 +7,6 @@
 // 'https://YOUR-USERNAME.github.io/nutrients/'
 const NUTRITION_APP_URL = 'https://tkb789.github.io/nutrients/';
 
-function loadNutritionFrame() {
-  const frame = document.getElementById('nutritionFrame');
-  if (!frame) return;
-  if (NUTRITION_APP_URL.includes('YOUR-USERNAME')) {
-    document.getElementById('nutritionNote').style.display = 'block';
-    return;
-  }
-  if (!frame.src) frame.src = NUTRITION_APP_URL; // lazy-load on first open
-}
-
 // ----- IndexedDB Wrapper -----
 const DB_NAME = 'spicycitrus_db';
 const DB_VERSION = 1;
@@ -104,12 +94,12 @@ function toast(msg) {
 // ----- Tabs -----
 document.querySelectorAll('.tab').forEach(btn => {
   btn.addEventListener('click', () => {
+    if (btn.dataset.tab === 'nutrition') { location.href = NUTRITION_APP_URL; return; }
     document.querySelectorAll('.tab').forEach(t => t.classList.remove('active'));
     document.querySelectorAll('.panel').forEach(p => p.classList.remove('active'));
     btn.classList.add('active');
     document.getElementById('tab-' + btn.dataset.tab).classList.add('active');
     if (btn.dataset.tab === 'rotation') drawWheel();
-    if (btn.dataset.tab === 'nutrition') loadNutritionFrame();
   });
 });
 
@@ -1089,13 +1079,7 @@ function renderRecipeView(r) {
       link: location.origin + location.pathname + '#recipe-' + encodeURIComponent(r.id),
     };
     try { localStorage.setItem('cs-nutrition-import', JSON.stringify(payload)); } catch (e) {}
-    closeModal();
-    document.querySelector('.tab[data-tab="nutrition"]').click();
-    const frame = document.getElementById('nutritionFrame');
-    if (frame && frame.src && frame.contentWindow) {
-      try { frame.contentWindow.postMessage(payload, new URL(NUTRITION_APP_URL).origin); } catch (e) {}
-    }
-    toast('Sent to Nutrition — match the ingredients there');
+    location.href = NUTRITION_APP_URL;
   });
   document.getElementById('copyLinkBtn').addEventListener('click', async () => {
     const link = location.origin + location.pathname + '#recipe-' + encodeURIComponent(r.id);

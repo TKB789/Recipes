@@ -1533,14 +1533,3 @@ body.cook-with-mode .back-to-top {
   transform: scale(0.92);
 }
 
-
-/* ===== NUTRITION TAB ===== */
-#tab-nutrition { padding: 0; }
-#nutritionFrame {
-  display: block;
-  width: 100%;
-  height: calc(100vh - 132px);
-  border: none;
-  background: var(--cream);
-}
-.nutrition-note { padding: 24px 18px; }
