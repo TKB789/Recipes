@@ -402,24 +402,92 @@ function wireSelectField(selectId) {
    Tries multiple CORS proxies, parses JSON-LD schema.
    ===================================================== */
 
+/* ===== THE ONE LINE YOU HAVE TO EDIT =====
+   After you deploy worker.js, Cloudflare gives you a URL that looks like
+   https://recipe-proxy.tkb789.workers.dev
+   Paste it below, add /?url= on the end, and keep the quotes. Like this:
+
+     const MY_PROXY = 'https://recipe-proxy.tkb789.workers.dev/?url=';
+
+   Leave it as '' and the app just uses the public proxies (Serious Eats fails). */
+const MY_PROXY = '';
+
+const PROXY_TIMEOUT_MS = 15000;
+
 const CORS_PROXIES = [
-  url => `https://api.allorigins.win/raw?url=${encodeURIComponent(url)}`,
-  url => `https://corsproxy.io/?${encodeURIComponent(url)}`,
-  url => `https://api.codetabs.com/v1/proxy?quest=${encodeURIComponent(url)}`
+  ...(MY_PROXY ? [{
+    name: 'own worker',
+    build: url => MY_PROXY + encodeURIComponent(url)
+  }] : []),
+  {
+    name: 'allorigins',
+    build: url => `https://api.allorigins.win/raw?url=${encodeURIComponent(url)}`
+  },
+  {
+    name: 'corsproxy.io',
+    build: url => `https://corsproxy.io/?${encodeURIComponent(url)}`
+  },
+  {
+    name: 'codetabs',
+    build: url => `https://api.codetabs.com/v1/proxy?quest=${encodeURIComponent(url)}`
+  },
+  {
+    // Renders the page with a real browser, so it also handles JS-only sites.
+    name: 'jina',
+    build: url => `https://r.jina.ai/${url}`,
+    headers: { 'X-Return-Format': 'html' }
+  }
 ];
 
-async function fetchHtml(url) {
-  let lastErr;
-  for (const proxy of CORS_PROXIES) {
-    try {
-      const r = await fetch(proxy(url), { method: 'GET' });
-      if (r.ok) {
-        const txt = await r.text();
-        if (txt && txt.length > 100) return txt;
-      }
-    } catch (e) { lastErr = e; }
+/* A bot-block page is still hundreds of characters long, so length alone proves
+   nothing. Classify the response instead: 'recipe' = usable, 'weak' = has metadata
+   but no schema (keep as a fallback), 'blocked'/'junk' = move on to the next proxy. */
+const BLOCK_PATTERNS = /just a moment|cf-browser-verification|cf_chl_|attention required|enable javascript and cookies|access denied|request blocked|are you a robot|captcha/i;
+
+function classifyHtml(txt) {
+  if (!txt || txt.length < 500) return 'junk';
+  if (/application\/ld\+json/i.test(txt) && /"@type"\s*:\s*(\[[^\]]*)?"Recipe"/i.test(txt)) {
+    return 'recipe';
   }
-  throw lastErr || new Error('All CORS proxies failed');
+  if (BLOCK_PATTERNS.test(txt.slice(0, 4000))) return 'blocked';
+  if (/<meta[^>]+property=["']og:title/i.test(txt)) return 'weak';
+  return 'junk';
+}
+
+async function fetchViaProxy(proxy, url) {
+  const ctrl = new AbortController();
+  const timer = setTimeout(() => ctrl.abort(), PROXY_TIMEOUT_MS);
+  try {
+    const r = await fetch(proxy.build(url), {
+      method: 'GET',
+      signal: ctrl.signal,
+      headers: proxy.headers || undefined
+    });
+    if (!r.ok) return null;
+    return await r.text();
+  } catch (e) {
+    return null;
+  } finally {
+    clearTimeout(timer);
+  }
+}
+
+async function fetchHtml(url) {
+  let fallback = null;
+  const tried = [];
+
+  for (const proxy of CORS_PROXIES) {
+    const txt = await fetchViaProxy(proxy, url);
+    const verdict = txt === null ? 'error' : classifyHtml(txt);
+    tried.push(`${proxy.name}: ${verdict}`);
+
+    if (verdict === 'recipe') return txt;
+    if (verdict === 'weak' && !fallback) fallback = txt;
+  }
+
+  console.warn('Proxy attempts —', tried.join(' | '));
+  if (fallback) return fallback;
+  throw new Error(`No proxy returned usable HTML (${tried.join(', ')})`);
 }
 
 function parseRecipeFromHtml(html, sourceUrl) {
